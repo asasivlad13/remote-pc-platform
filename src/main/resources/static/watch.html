@@ -4,21 +4,25 @@
     <title>Remote PC - Watching</title>
     <style>
         body { font-family: Arial; text-align: center; background: black; color: white; }
-        canvas { border: 2px solid white; background: black; margin-top: 20px; max-width: 100%; }
+        canvas { border: 2px solid white; background: black; margin-top: 20px; max-width: 100%; cursor: crosshair; }
         .controls { margin-top: 20px; }
         button { padding: 10px 20px; margin: 5px; cursor: pointer; }
         .info { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; }
+        .note { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; font-size: 10px; }
     </style>
 </head>
 <body>
 <h2>Watching: <span id="pcName"></span></h2>
-<canvas id="videoCanvas" width="800" height="600"></canvas>
+<canvas id="videoCanvas" width="1024" height="768"></canvas>
 <div class="controls">
     <button onclick="disconnect()">Disconnect</button>
 </div>
 <div class="info">
     <div>FPS: <span id="fps">0</span></div>
     <div>Latency: <span id="latency">0</span> ms</div>
+</div>
+<div class="note">
+    Mouse move/click and keyboard are enabled
 </div>
 
 <script>
@@ -80,6 +84,41 @@
             console.error('WebSocket error:', error);
         };
     }
+
+    function sendCommand(action, data) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const command = {
+                type: 'command',
+                pcId: parseInt(pcId),
+                action: action,
+                ...data
+            };
+            ws.send(JSON.stringify(command));
+        }
+    }
+
+    // Мышь
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        sendCommand('MOUSE_MOVE', { x: Math.round(x), y: Math.round(y) });
+    });
+
+    canvas.addEventListener('click', (e) => {
+        sendCommand('MOUSE_CLICK', { button: 1 });
+    });
+
+    // Клавиатура
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
+        }
+        sendCommand('KEY_PRESS', { keyCode: e.keyCode });
+        e.preventDefault();
+    });
 
     function disconnect() {
         if (ws) ws.close();

@@ -33,6 +33,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, WebSocketSession> agentSessions = new ConcurrentHashMap<>();
+    private final Map<Long, WebSocketSession> agentSessionsByPcId = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -44,7 +45,6 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         String payload = message.getPayload();
         System.out.println("Received text, length: " + payload.length() + " chars");
 
-        // Если сообщение слишком большое, логируем только начало
         if (payload.length() > 1000) {
             System.out.println("  (first 100 chars): " + payload.substring(0, 100) + "...");
         } else {
@@ -95,6 +95,10 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         pc.setLastConnection(LocalDateTime.now());
         pcRepository.save(pc);
 
+        // Сохраняем сессию по PC ID для отправки команд
+        agentSessionsByPcId.put(pc.getId(), session);
+        System.out.println("Agent session stored for PC ID: " + pc.getId());
+
         agentSessions.put(mac, session);
         session.sendMessage(new TextMessage("{\"status\":\"registered\"}"));
 
@@ -118,7 +122,6 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         if (mac != null) {
             String imageBase64 = json.get("image").asText();
             System.out.println("📸 Frame from " + mac + ", size: " + imageBase64.length() + " chars");
-            // TODO: Сохранять кадр для ретрансляции веб-клиенту
         }
     }
 
@@ -129,6 +132,17 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             }
         }
         return null;
+    }
+
+    public void sendCommandToAgent(Long pcId, JsonNode command) throws Exception {
+        WebSocketSession agentSession = agentSessionsByPcId.get(pcId);
+        if (agentSession != null && agentSession.isOpen()) {
+            String commandJson = objectMapper.writeValueAsString(command);
+            agentSession.sendMessage(new TextMessage(commandJson));
+            System.out.println("Command forwarded to agent for PC " + pcId + ": " + commandJson);
+        } else {
+            System.out.println("Agent not connected for PC " + pcId);
+        }
     }
 
     @Override
@@ -142,6 +156,10 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             }
             agentSessions.remove(mac);
         }
+
+        // Удаляем из agentSessionsByPcId
+        agentSessionsByPcId.values().remove(session);
+
         System.out.println("Agent disconnected: " + session.getId());
     }
 }
