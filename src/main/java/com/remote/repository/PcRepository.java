@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface PcRepository extends JpaRepository<Pc, Long> {
     List<Pc> findByUser(User user);
+
+    Pc findByMacAddress(String macAddress);
 }

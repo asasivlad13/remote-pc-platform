@@ -1,5 +1,6 @@
 package com.remote.controller;
 
+import com.remote.dto.PcResponseDto;
 import com.remote.model.Pc;
 import com.remote.model.User;
 import com.remote.repository.PcRepository;
@@ -9,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/pcs")
@@ -21,9 +23,21 @@ public class PcController {
     private UserRepository userRepository;
 
     @GetMapping
-    public List<Pc> getMyPcs() {
+    public List<PcResponseDto> getMyPcs() {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User user = userRepository.findByUsername(username).orElseThrow();
-        return pcRepository.findByUser(user);
+
+        List<Pc> pcs = pcRepository.findByUser(user);
+
+        // Преобразуем Pc в PcResponseDto (без циклических ссылок)
+        return pcs.stream()
+                .map(pc -> new PcResponseDto(
+                        pc.getId(),
+                        pc.getName(),
+                        pc.getMacAddress(),
+                        pc.getStatus(),
+                        pc.getLastConnection()
+                ))
+                .collect(Collectors.toList());
     }
 }
