@@ -1,58 +1,86 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Remote PC - My PCs</title>
+    <title>Remote PC - My Computers</title>
     <style>
         body { font-family: Arial; text-align: center; margin-top: 50px; }
         table { margin: auto; border-collapse: collapse; width: 80%; }
-        th, td { border: 1px solid #ddd; padding: 10px; }
-        th { background: #f2f2f2; }
-        .online { color: green; font-weight: bold; }
-        .offline { color: red; }
-        .sleep { color: orange; }
-        button { padding: 5px 10px; cursor: pointer; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #4CAF50; color: white; }
+        .status-online { color: green; font-weight: bold; }
+        .status-offline { color: red; font-weight: bold; }
+        .status-sleep { color: orange; font-weight: bold; }
+        button { padding: 8px 16px; background: #008CBA; color: white; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #005f6b; }
+        .logout { position: fixed; top: 20px; right: 20px; background: #f44336; }
+        .logout:hover { background: #d32f2f; }
     </style>
 </head>
 <body>
+<button class="logout" onclick="logout()">Logout</button>
 <h2>My Computers</h2>
 <table id="pcsTable">
     <thead>
-    <tr><th>Name</th><th>MAC Address</th><th>Status</th><th>Action</th></tr>
+    <tr><th>Name</th><th>MAC Address</th><th>Status</th><th>Last Connection</th><th>Action</th></tr>
     </thead>
-    <tbody></tbody>
+    <tbody id="pcsBody"></tbody>
 </table>
 
 <script>
     const token = localStorage.getItem('token');
-    if (!token) window.location.href = '/login.html';
+    if (!token) {
+        window.location.href = '/login.html';
+    }
 
     async function loadPCs() {
-        const response = await fetch('/pcs', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const pcs = await response.json();
+        try {
+            const response = await fetch('/pcs', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
 
-        const tbody = document.querySelector('#pcsTable tbody');
-        tbody.innerHTML = '';
+            if (response.status === 401 || response.status === 403) {
+                localStorage.removeItem('token');
+                window.location.href = '/login.html';
+                return;
+            }
 
-        for (const pc of pcs) {
-            const row = tbody.insertRow();
-            row.insertCell(0).innerText = pc.name;
-            row.insertCell(1).innerText = pc.macAddress;
+            const pcs = await response.json();
+            const tbody = document.getElementById('pcsBody');
+            tbody.innerHTML = '';
 
-            const statusCell = row.insertCell(2);
-            statusCell.innerText = pc.status;
-            statusCell.className = pc.status.toLowerCase();
+            for (const pc of pcs) {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerText = pc.name;
+                row.insertCell(1).innerText = pc.macAddress;
 
-            const actionCell = row.insertCell(3);
-            const watchBtn = document.createElement('button');
-            watchBtn.innerText = 'Watch';
-            watchBtn.onclick = () => window.location.href = `/watch.html?pcId=${pc.id}&pcName=${pc.name}`;
-            actionCell.appendChild(watchBtn);
+                const statusCell = row.insertCell(2);
+                statusCell.innerText = pc.status;
+                statusCell.className = `status-${pc.status.toLowerCase()}`;
+
+                const lastConn = pc.lastConnection ? new Date(pc.lastConnection).toLocaleString() : 'Never';
+                row.insertCell(3).innerText = lastConn;
+
+                const actionCell = row.insertCell(3);
+                const watchBtn = document.createElement('button');
+                watchBtn.innerText = 'Connect';
+                watchBtn.onclick = () => {
+                    window.location.href = `/watch.html?pcId=${pc.id}&pcName=${pc.name}`;
+                };
+                actionCell.appendChild(watchBtn);
+            }
+        } catch (error) {
+            console.error('Error loading PCs:', error);
+            document.getElementById('pcsBody').innerHTML = '<tr><td colspan="5">Error loading computers</td></tr>';
         }
     }
 
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.href = '/login.html';
+    }
+
     loadPCs();
+    setInterval(loadPCs, 5000); // Обновляем список каждые 5 секунд
 </script>
 </body>
 </html>
