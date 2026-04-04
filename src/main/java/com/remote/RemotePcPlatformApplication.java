@@ -1,4 +1,4 @@
-package remote_pc_platform;
+package com.remote;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
