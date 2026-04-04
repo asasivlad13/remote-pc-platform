@@ -3,26 +3,66 @@
 <head>
     <title>Remote PC - Watching</title>
     <style>
-        body { font-family: Arial; text-align: center; background: black; color: white; }
-        canvas { border: 2px solid white; background: black; margin-top: 20px; max-width: 100%; cursor: crosshair; }
-        .controls { margin-top: 20px; }
-        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
-        .info { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; }
+        body { font-family: Arial; text-align: center; background: black; color: white; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        canvas { border: 2px solid white; background: black; margin-top: 10px; max-width: 100%; cursor: crosshair; }
+        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+        .settings-panel { background: rgba(30,30,30,0.9); padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+        .settings-panel select, .settings-panel button { padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; background: #4CAF50; color: white; }
+        .settings-panel select { background: #333; color: white; }
+        .settings-panel button:hover { background: #45a049; }
+        .info { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; text-align: right; }
         .note { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; font-size: 10px; }
+        .fullscreen-btn { background: #008CBA; }
+        .fullscreen-btn:hover { background: #005f6b; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
+        .disconnect-btn { background: #f44336; color: white; }
+        .disconnect-btn:hover { background: #d32f2f; }
     </style>
 </head>
 <body>
-<h2>Watching: <span id="pcName"></span></h2>
-<canvas id="videoCanvas" width="1024" height="768"></canvas>
-<div class="controls">
-    <button onclick="disconnect()">Disconnect</button>
+<div class="container">
+    <h2>Watching: <span id="pcName"></span></h2>
+
+    <div class="settings-panel">
+        <div>
+            <label>Resolution: </label>
+            <select id="resolutionSelect">
+                <option value="360">360p (640x360)</option>
+                <option value="480">480p (854x480)</option>
+                <option value="720" selected>720p (1280x720)</option>
+                <option value="1080">1080p (1920x1080)</option>
+                <option value="1440">1440p (2560x1440)</option>
+            </select>
+        </div>
+        <div>
+            <label>FPS: </label>
+            <select id="fpsSelect">
+                <option value="15">15 FPS (Low)</option>
+                <option value="24" selected>24 FPS (Medium)</option>
+                <option value="30">30 FPS (High)</option>
+                <option value="60">60 FPS (Ultra)</option>
+            </select>
+        </div>
+        <button id="applySettingsBtn">Apply Settings</button>
+        <button id="fullscreenBtn" class="fullscreen-btn">Fullscreen</button>
+        <button id="disconnectBtn" class="disconnect-btn">Disconnect</button>
+    </div>
+
+    <canvas id="videoCanvas" width="1280" height="720"></canvas>
+    <div class="controls">
+        <span>Mouse: move/click works | Keyboard: all keys work</span>
+    </div>
 </div>
+
 <div class="info">
-    <div>FPS: <span id="fps">0</span></div>
+    <div>Resolution: <span id="currentRes">720p</span></div>
+    <div>Target FPS: <span id="targetFps">24</span></div>
+    <div>Actual FPS: <span id="fps">0</span></div>
     <div>Latency: <span id="latency">0</span> ms</div>
 </div>
 <div class="note">
-    Mouse move/click and keyboard are enabled
+    💡 Mouse move/click and keyboard are enabled | Settings apply to new frames
 </div>
 
 <script>
@@ -41,6 +81,49 @@
     let frameCount = 0;
     let lastTime = Date.now();
     let lastFrameTime = Date.now();
+    let currentResolution = '720';
+    let currentFps = 24;
+    let frameInterval = 1000 / 24;
+    let lastFrameReceived = 0;
+
+    // Получаем разрешение canvas
+    function getResolutionSize(resolution) {
+        const sizes = {
+            '360': { width: 640, height: 360 },
+            '480': { width: 854, height: 480 },
+            '720': { width: 1280, height: 720 },
+            '1080': { width: 1920, height: 1080 },
+            '1440': { width: 2560, height: 1440 }
+        };
+        return sizes[resolution] || sizes['720'];
+    }
+
+    // Применяем настройки (отправляем агенту)
+    function applySettings() {
+        currentResolution = document.getElementById('resolutionSelect').value;
+        currentFps = parseInt(document.getElementById('fpsSelect').value);
+
+        frameInterval = 1000 / currentFps;
+
+        document.getElementById('currentRes').innerText = currentResolution + 'p';
+        document.getElementById('targetFps').innerText = currentFps;
+
+        const size = getResolutionSize(currentResolution);
+        canvas.width = size.width;
+        canvas.height = size.height;
+
+        // Отправляем новые настройки агенту
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'settings',
+                pcId: parseInt(pcId),
+                resolution: currentResolution,
+                fps: currentFps
+            }));
+        }
+
+        console.log(`Settings applied: ${currentResolution}p, ${currentFps} FPS`);
+    }
 
     function connect() {
         ws = new WebSocket(`ws://localhost:8080/ws/client`);
@@ -48,30 +131,35 @@
         ws.onopen = () => {
             console.log('Connected to WebSocket');
             ws.send(JSON.stringify({ type: 'watch', pcId: parseInt(pcId) }));
+            // Отправляем текущие настройки после подключения
+            setTimeout(() => applySettings(), 500);
         };
 
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.type === 'frame') {
-                const img = new Image();
-                img.onload = () => {
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
+                const now = Date.now();
+                if (now - lastFrameReceived >= frameInterval) {
+                    lastFrameReceived = now;
 
-                    frameCount++;
-                    const now = Date.now();
-                    if (now - lastTime >= 1000) {
-                        document.getElementById('fps').innerText = frameCount;
-                        frameCount = 0;
-                        lastTime = now;
-                    }
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-                    const latency = now - lastFrameTime;
-                    document.getElementById('latency').innerText = latency;
-                    lastFrameTime = now;
-                };
-                img.src = `data:image/jpeg;base64,${data.image}`;
+                        frameCount++;
+                        const fpsNow = Date.now();
+                        if (fpsNow - lastTime >= 1000) {
+                            document.getElementById('fps').innerText = frameCount;
+                            frameCount = 0;
+                            lastTime = fpsNow;
+                        }
+
+                        const latency = now - lastFrameTime;
+                        document.getElementById('latency').innerText = latency;
+                        lastFrameTime = now;
+                    };
+                    img.src = `data:image/jpeg;base64,${data.image}`;
+                }
             }
         };
 
@@ -97,6 +185,15 @@
         }
     }
 
+    // Полноэкранный режим
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+
     // Мышь
     canvas.addEventListener('mousemove', (e) => {
         const rect = canvas.getBoundingClientRect();
@@ -113,18 +210,25 @@
 
     // Клавиатура
     document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') {
             return;
         }
         sendCommand('KEY_PRESS', { keyCode: e.keyCode });
         e.preventDefault();
     });
 
-    function disconnect() {
+    // Кнопки
+    document.getElementById('applySettingsBtn').addEventListener('click', applySettings);
+    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    document.getElementById('disconnectBtn').addEventListener('click', () => {
         if (ws) ws.close();
         window.location.href = '/pcs.html';
-    }
+    });
 
+    // Инициализация
+    const size = getResolutionSize('720');
+    canvas.width = size.width;
+    canvas.height = size.height;
     connect();
 </script>
 </body>
