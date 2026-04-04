@@ -1,5 +1,6 @@
 package com.remote.controller;
 
+import com.remote.handler.WebSocketClientHandler;
 import com.remote.model.Pc;
 import com.remote.repository.PcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +18,8 @@ public class FrameController {
 
     @Autowired
     private PcRepository pcRepository;
-
+    @Autowired
+    private WebSocketClientHandler webSocketClientHandler;
     // Хранилище последних кадров (mac -> base64 image)
     private final Map<String, String> lastFrames = new ConcurrentHashMap<>();
 
@@ -30,8 +32,17 @@ public class FrameController {
             return ResponseEntity.badRequest().body("Missing mac or image");
         }
 
+        // Находим PC по mac
+        Pc pc = pcRepository.findByMacAddress(mac);
+        if (pc == null) {
+            return ResponseEntity.badRequest().body("PC not found");
+        }
+
         lastFrames.put(mac, imageBase64);
         System.out.println("📸 Frame saved for " + mac + ", size: " + imageBase64.length() + " chars");
+
+        // Ретранслируем всем веб-клиентам, которые смотрят этот ПК
+        webSocketClientHandler.broadcastFrame(pc.getId(), imageBase64);
 
         return ResponseEntity.ok().build();
     }

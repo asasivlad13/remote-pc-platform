@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Remote PC - My PCs</title>
+    <style>
+        body { font-family: Arial; text-align: center; margin-top: 50px; }
+        table { margin: auto; border-collapse: collapse; width: 80%; }
+        th, td { border: 1px solid #ddd; padding: 10px; }
+        th { background: #f2f2f2; }
+        .online { color: green; font-weight: bold; }
+        .offline { color: red; }
+        .sleep { color: orange; }
+        button { padding: 5px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<h2>My Computers</h2>
+<table id="pcsTable">
+    <thead>
+    <tr><th>Name</th><th>MAC Address</th><th>Status</th><th>Action</th></tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = '/login.html';
+
+    async function loadPCs() {
+        const response = await fetch('/pcs', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const pcs = await response.json();
+
+        const tbody = document.querySelector('#pcsTable tbody');
+        tbody.innerHTML = '';
+
+        for (const pc of pcs) {
+            const row = tbody.insertRow();
+            row.insertCell(0).innerText = pc.name;
+            row.insertCell(1).innerText = pc.macAddress;
+
+            const statusCell = row.insertCell(2);
+            statusCell.innerText = pc.status;
+            statusCell.className = pc.status.toLowerCase();
+
+            const actionCell = row.insertCell(3);
+            const watchBtn = document.createElement('button');
+            watchBtn.innerText = 'Watch';
+            watchBtn.onclick = () => window.location.href = `/watch.html?pcId=${pc.id}&pcName=${pc.name}`;
+            actionCell.appendChild(watchBtn);
+        }
+    }
+
+    loadPCs();
+</script>
+</body>
+</html>

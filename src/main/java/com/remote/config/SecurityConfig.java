@@ -35,9 +35,21 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity http, JwtFilter jwtFilter) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configure(http))
+                .cors(cors -> cors.disable())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/register", "/auth/login", "/ws/**", "/api/frames/**").permitAll()
+                        .requestMatchers(
+                                "/auth/register",
+                                "/auth/login",
+                                "/ws/**",
+                                "/api/frames/**",
+                                "/login.html",
+                                "/pcs.html",
+                                "/watch.html",
+                                "/**/*.html",
+                                "/**/*.css",
+                                "/**/*.js",
+                                "/static/**"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -45,5 +57,4 @@ public class SecurityConfig {
 
         return http.build();
     }
-
 }

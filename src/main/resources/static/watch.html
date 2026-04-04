@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Remote PC - Watching</title>
+    <style>
+        body { font-family: Arial; text-align: center; background: black; color: white; }
+        canvas { border: 2px solid white; background: black; margin-top: 20px; max-width: 100%; }
+        .controls { margin-top: 20px; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        .info { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; }
+    </style>
+</head>
+<body>
+<h2>Watching: <span id="pcName"></span></h2>
+<canvas id="videoCanvas" width="800" height="600"></canvas>
+<div class="controls">
+    <button onclick="disconnect()">Disconnect</button>
+</div>
+<div class="info">
+    <div>FPS: <span id="fps">0</span></div>
+    <div>Latency: <span id="latency">0</span> ms</div>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const pcId = urlParams.get('pcId');
+    const pcName = urlParams.get('pcName');
+    document.getElementById('pcName').innerText = pcName;
+
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = '/login.html';
+
+    const canvas = document.getElementById('videoCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let ws;
+    let frameCount = 0;
+    let lastTime = Date.now();
+    let lastFrameTime = Date.now();
+
+    function connect() {
+        ws = new WebSocket(`ws://localhost:8080/ws/client`);
+
+        ws.onopen = () => {
+            console.log('Connected to WebSocket');
+            ws.send(JSON.stringify({ type: 'watch', pcId: parseInt(pcId) }));
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'frame') {
+                const img = new Image();
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    frameCount++;
+                    const now = Date.now();
+                    if (now - lastTime >= 1000) {
+                        document.getElementById('fps').innerText = frameCount;
+                        frameCount = 0;
+                        lastTime = now;
+                    }
+
+                    const latency = now - lastFrameTime;
+                    document.getElementById('latency').innerText = latency;
+                    lastFrameTime = now;
+                };
+                img.src = `data:image/jpeg;base64,${data.image}`;
+            }
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket disconnected, reconnecting in 3 seconds...');
+            setTimeout(connect, 3000);
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+    }
+
+    function disconnect() {
+        if (ws) ws.close();
+        window.location.href = '/pcs.html';
+    }
+
+    connect();
+</script>
+</body>
+</html>

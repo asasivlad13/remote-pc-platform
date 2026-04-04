@@ -1,6 +1,7 @@
 package com.remote.config;
 
 import com.remote.handler.AgentWebSocketHandler;
+import com.remote.handler.WebSocketClientHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -14,9 +15,15 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Autowired
     private AgentWebSocketHandler agentWebSocketHandler;
 
+    @Autowired
+    private WebSocketClientHandler webSocketClientHandler;
+
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(agentWebSocketHandler, "/ws/agent")
+                .setAllowedOrigins("*");
+
+        registry.addHandler(webSocketClientHandler, "/ws/client")
                 .setAllowedOrigins("*");
     }
 }
