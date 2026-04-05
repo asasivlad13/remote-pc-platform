@@ -1,75 +1,47 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Remote PC - Watching</title>
-    <style>
-        body { font-family: Arial; text-align: center; background: black; color: white; margin: 0; padding: 20px; }
-        .container { max-width: 1400px; margin: 0 auto; }
-        canvas { border: 2px solid white; background: black; margin-top: 10px; max-width: 100%; cursor: crosshair; }
-        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-        .settings-panel { background: rgba(30,30,30,0.9); padding: 10px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
-        .settings-panel select, .settings-panel button { padding: 8px 15px; border-radius: 5px; border: none; cursor: pointer; background: #4CAF50; color: white; }
-        .settings-panel select { background: #333; color: white; }
-        .settings-panel button:hover { background: #45a049; }
-        .info { position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 10px; border-radius: 5px; font-size: 12px; text-align: right; }
-        .note { position: fixed; bottom: 10px; left: 10px; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 5px; font-size: 10px; }
-        .fullscreen-btn { background: #008CBA; }
-        .fullscreen-btn:hover { background: #005f6b; }
-        button { padding: 8px 16px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; }
-        .disconnect-btn { background: #f44336; color: white; }
-        .disconnect-btn:hover { background: #d32f2f; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote PC - Remote Access</title>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-<div class="container">
-    <h2>Watching: <span id="pcName"></span></h2>
-
-    <div class="settings-panel">
-        <div>
-            <label>Resolution: </label>
-            <select id="resolutionSelect">
-                <option value="360">360p (640x360)</option>
-                <option value="480">480p (854x480)</option>
-                <option value="720" selected>720p (1280x720)</option>
-                <option value="1080">1080p (1920x1080)</option>
-                <option value="1440">1440p (2560x1440)</option>
-            </select>
-        </div>
-        <div>
-            <label>FPS: </label>
-            <select id="fpsSelect">
-                <option value="15">15 FPS (Low)</option>
-                <option value="24" selected>24 FPS (Medium)</option>
-                <option value="30">30 FPS (High)</option>
-                <option value="60">60 FPS (Ultra)</option>
-            </select>
-        </div>
-        <button id="applySettingsBtn">Apply Settings</button>
-        <button id="fullscreenBtn" class="fullscreen-btn">Fullscreen</button>
-        <button id="disconnectBtn" class="disconnect-btn">Disconnect</button>
+<body style="background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); overflow: hidden;">
+<div class="top-bar" style="position:fixed;top:0;left:0;right:0;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:100;">
+    <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:12px;display:flex;align-items:center;justify-content:center;">💻</div>
+        <div><div style="font-weight:600;">Remote Access</div><div style="font-size:12px;color:#93c5fd;" id="pcNameDisplay">Connecting...</div></div>
     </div>
-
-    <canvas id="videoCanvas" width="1280" height="720"></canvas>
-    <div class="controls">
-        <span>Mouse: move/click works | Keyboard: all keys work</span>
+    <div style="display:flex;gap:10px;">
+        <div style="color:#93c5fd;font-size:13px;display:none;gap:16px;" id="metrics"><span>📊 FPS: <span id="fps" style="color:#34d399;">0</span></span><span>⏱️ Latency: <span id="latency" style="color:#fbbf24;">0</span> ms</span></div>
+        <button id="settingsBtn" class="btn-glass">⚙️</button>
+        <button id="fullscreenBtn" class="btn-glass">🖥️</button>
+        <button id="disconnectBtn" class="btn-glass" style="background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.5);">⏻</button>
     </div>
 </div>
 
-<div class="info">
-    <div>Resolution: <span id="currentRes">720p</span></div>
-    <div>Target FPS: <span id="targetFps">24</span></div>
-    <div>Actual FPS: <span id="fps">0</span></div>
-    <div>Latency: <span id="latency">0</span> ms</div>
+<div id="settingsPanel" class="settings-panel" style="position:fixed;top:70px;right:20px;width:260px;padding:20px;z-index:200;display:none;">
+    <h3 style="margin-bottom:16px;">Video Settings</h3>
+    <div style="margin-bottom:16px;"><label style="color:#93c5fd;font-size:13px;">Resolution</label><select id="resolutionSelect" class="settings-select" style="width:100%;margin-top:6px;"><option value="360">360p</option><option value="480">480p</option><option value="720" selected>720p</option><option value="1080">1080p</option><option value="1440">1440p</option></select></div>
+    <div style="margin-bottom:20px;"><label style="color:#93c5fd;font-size:13px;">Frame Rate</label><select id="fpsSelect" class="settings-select" style="width:100%;margin-top:6px;"><option value="15">15 FPS</option><option value="24" selected>24 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select></div>
+    <button id="applySettingsBtn" class="btn-primary" style="width:100%;justify-content:center;">Apply</button>
 </div>
-<div class="note">
-    💡 Mouse move/click and keyboard are enabled | Settings apply to new frames
+
+<div style="position:fixed;top:70px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;">
+    <canvas id="videoCanvas" style="max-width:100%;max-height:calc(100vh - 80px);object-fit:contain;border-radius:16px;"></canvas>
 </div>
+
+<div id="loadingOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:50;">
+    <div style="text-align:center;"><div class="loading-spinner" style="margin:0 auto;"></div><p style="margin-top:20px;">Connecting...</p></div>
+</div>
+
+<div id="statusBadge" style="position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:12px;color:#34d399;">🟢 Connected</div>
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
     const pcId = urlParams.get('pcId');
-    const pcName = urlParams.get('pcName');
-    document.getElementById('pcName').innerText = pcName;
+    const pcName = decodeURIComponent(urlParams.get('pcName') || 'Unknown');
+    document.getElementById('pcNameDisplay').innerText = pcName;
 
     const token = localStorage.getItem('token');
     if (!token) window.location.href = '/login.html';
@@ -77,158 +49,58 @@
     const canvas = document.getElementById('videoCanvas');
     const ctx = canvas.getContext('2d');
 
-    let ws;
-    let frameCount = 0;
-    let lastTime = Date.now();
-    let lastFrameTime = Date.now();
-    let currentResolution = '720';
-    let currentFps = 24;
-    let frameInterval = 1000 / 24;
-    let lastFrameReceived = 0;
+    let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 24, frameInterval = 1000/24;
 
-    // Получаем разрешение canvas
-    function getResolutionSize(resolution) {
-        const sizes = {
-            '360': { width: 640, height: 360 },
-            '480': { width: 854, height: 480 },
-            '720': { width: 1280, height: 720 },
-            '1080': { width: 1920, height: 1080 },
-            '1440': { width: 2560, height: 1440 }
-        };
-        return sizes[resolution] || sizes['720'];
-    }
+    function getSize(r) { return { '360':{w:640,h:360},'480':{w:854,h:480},'720':{w:1280,h:720},'1080':{w:1920,h:1080},'1440':{w:2560,h:1440} }[r] || {w:1280,h:720}; }
 
-    // Применяем настройки (отправляем агенту)
     function applySettings() {
         currentResolution = document.getElementById('resolutionSelect').value;
         currentFps = parseInt(document.getElementById('fpsSelect').value);
-
         frameInterval = 1000 / currentFps;
-
-        document.getElementById('currentRes').innerText = currentResolution + 'p';
-        document.getElementById('targetFps').innerText = currentFps;
-
-        const size = getResolutionSize(currentResolution);
-        canvas.width = size.width;
-        canvas.height = size.height;
-
-        // Отправляем новые настройки агенту
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'settings',
-                pcId: parseInt(pcId),
-                resolution: currentResolution,
-                fps: currentFps
-            }));
-        }
-
-        console.log(`Settings applied: ${currentResolution}p, ${currentFps} FPS`);
+        const s = getSize(currentResolution);
+        canvas.width = s.w; canvas.height = s.h;
+        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'settings', pcId:parseInt(pcId), resolution:currentResolution, fps:currentFps }));
     }
 
     function connect() {
+        document.getElementById('loadingOverlay').style.display = 'flex';
         ws = new WebSocket(`ws://localhost:8080/ws/client`);
-
         ws.onopen = () => {
-            console.log('Connected to WebSocket');
-            ws.send(JSON.stringify({ type: 'watch', pcId: parseInt(pcId) }));
-            // Отправляем текущие настройки после подключения
-            setTimeout(() => applySettings(), 500);
+            document.getElementById('loadingOverlay').style.display = 'none';
+            document.getElementById('metrics').style.display = 'flex';
+            ws.send(JSON.stringify({ type:'watch', pcId:parseInt(pcId) }));
+            setTimeout(applySettings, 500);
         };
-
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
             if (data.type === 'frame') {
                 const now = Date.now();
                 if (now - lastFrameReceived >= frameInterval) {
                     lastFrameReceived = now;
-
                     const img = new Image();
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                        frameCount++;
-                        const fpsNow = Date.now();
-                        if (fpsNow - lastTime >= 1000) {
-                            document.getElementById('fps').innerText = frameCount;
-                            frameCount = 0;
-                            lastTime = fpsNow;
-                        }
-
-                        const latency = now - lastFrameTime;
-                        document.getElementById('latency').innerText = latency;
-                        lastFrameTime = now;
-                    };
+                    img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); frameCount++; const now2 = Date.now(); if (now2 - lastTime >= 1000) { document.getElementById('fps').innerText = frameCount; frameCount = 0; lastTime = now2; } document.getElementById('latency').innerText = now2 - lastFrameTime; lastFrameTime = now2; };
                     img.src = `data:image/jpeg;base64,${data.image}`;
                 }
             }
         };
-
-        ws.onclose = () => {
-            console.log('WebSocket disconnected, reconnecting in 3 seconds...');
-            setTimeout(connect, 3000);
-        };
-
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-        };
+        ws.onclose = () => { document.getElementById('statusBadge').innerHTML = '🟡 Reconnecting...'; setTimeout(connect, 3000); };
+        ws.onerror = () => { document.getElementById('statusBadge').innerHTML = '🔴 Error'; };
     }
 
-    function sendCommand(action, data) {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            const command = {
-                type: 'command',
-                pcId: parseInt(pcId),
-                action: action,
-                ...data
-            };
-            ws.send(JSON.stringify(command));
-        }
-    }
+    let lastMouseMove = 0, lastClick = 0;
+    function sendCommand(action, data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'command', pcId:parseInt(pcId), action, ...data })); }
 
-    // Полноэкранный режим
-    function toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
-        } else {
-            document.exitFullscreen();
-        }
-    }
+    canvas.addEventListener('mousemove', (e) => { const now = Date.now(); if (now - lastMouseMove < 16) return; lastMouseMove = now; const rect = canvas.getBoundingClientRect(); const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height; const x = (e.clientX - rect.left) * scaleX; const y = (e.clientY - rect.top) * scaleY; sendCommand('MOUSE_MOVE', { x: Math.round(x), y: Math.round(y) }); });
+    canvas.addEventListener('click', (e) => { const now = Date.now(); if (now - lastClick < 200) return; lastClick = now; sendCommand('MOUSE_CLICK', { button: 1 }); });
+    document.addEventListener('keydown', (e) => { if (e.target.tagName === 'SELECT') return; sendCommand('KEY_PRESS', { keyCode: e.keyCode }); e.preventDefault(); });
 
-    // Мышь
-    canvas.addEventListener('mousemove', (e) => {
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-        sendCommand('MOUSE_MOVE', { x: Math.round(x), y: Math.round(y) });
-    });
+    document.getElementById('settingsBtn').onclick = () => { const p = document.getElementById('settingsPanel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; };
+    document.getElementById('applySettingsBtn').onclick = () => { applySettings(); document.getElementById('settingsPanel').style.display = 'none'; };
+    document.getElementById('fullscreenBtn').onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+    document.getElementById('disconnectBtn').onclick = () => { if (ws) ws.close(); window.location.href = '/pcs.html'; };
 
-    canvas.addEventListener('click', (e) => {
-        sendCommand('MOUSE_CLICK', { button: 1 });
-    });
-
-    // Клавиатура
-    document.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') {
-            return;
-        }
-        sendCommand('KEY_PRESS', { keyCode: e.keyCode });
-        e.preventDefault();
-    });
-
-    // Кнопки
-    document.getElementById('applySettingsBtn').addEventListener('click', applySettings);
-    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
-    document.getElementById('disconnectBtn').addEventListener('click', () => {
-        if (ws) ws.close();
-        window.location.href = '/pcs.html';
-    });
-
-    // Инициализация
-    const size = getResolutionSize('720');
-    canvas.width = size.width;
-    canvas.height = size.height;
+    const s = getSize('720');
+    canvas.width = s.w; canvas.height = s.h;
     connect();
 </script>
 </body>

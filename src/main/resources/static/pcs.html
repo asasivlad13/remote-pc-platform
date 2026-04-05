@@ -1,35 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Remote PC - My Computers</title>
-    <style>
-        body { font-family: Arial; text-align: center; margin-top: 50px; }
-        table { margin: auto; border-collapse: collapse; width: 80%; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background: #4CAF50; color: white; }
-        .status-online { color: green; font-weight: bold; }
-        .status-offline { color: red; font-weight: bold; }
-        .status-sleep { color: orange; font-weight: bold; }
-        button { padding: 8px 16px; background: #008CBA; color: white; border: none; cursor: pointer; border-radius: 4px; }
-        button:hover { background: #005f6b; }
-        .logout { position: fixed; top: 20px; right: 20px; background: #f44336; }
-        .logout:hover { background: #d32f2f; }
-    </style>
+    <link rel="stylesheet" href="/css/style.css">
 </head>
-<body>
-<button class="logout" onclick="logout()">Logout</button>
-<h2>My Computers</h2>
-<table id="pcsTable">
-    <thead>
-    <tr><th>Name</th><th>MAC Address</th><th>Status</th><th>Last Connection</th><th>Action</th></tr>
-    </thead>
-    <tbody id="pcsBody"></tbody>
-</table>
+<body style="padding: 24px;">
+<div style="max-width: 1200px; margin: 0 auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+        <div class="fade-in-up">
+            <h1 style="font-size: 32px;">My Computers</h1>
+            <p style="color: rgba(255,255,255,0.5);">Manage your remote devices</p>
+        </div>
+        <button onclick="logout()" class="btn-glass">🚪 Logout</button>
+    </div>
+
+    <div id="pcsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
+        <div style="grid-column: 1/-1; text-align: center; padding: 60px;">
+            <div class="loading-spinner" style="margin: 0 auto;"></div>
+            <p style="margin-top: 20px;">Loading computers...</p>
+        </div>
+    </div>
+</div>
 
 <script>
     const token = localStorage.getItem('token');
-    if (!token) {
-        window.location.href = '/login.html';
+    if (!token) window.location.href = '/login.html';
+
+    function getStatusClass(status) {
+        return status ? status.toLowerCase() : 'offline';
     }
 
     async function loadPCs() {
@@ -37,50 +37,43 @@
             const response = await fetch('/pcs', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-
             if (response.status === 401 || response.status === 403) {
                 localStorage.removeItem('token');
                 window.location.href = '/login.html';
                 return;
             }
-
             const pcs = await response.json();
-            const tbody = document.getElementById('pcsBody');
-            tbody.innerHTML = '';
-
-            for (const pc of pcs) {
-                const row = tbody.insertRow();
-                row.insertCell(0).innerText = pc.name;
-                row.insertCell(1).innerText = pc.macAddress;
-
-                const statusCell = row.insertCell(2);
-                statusCell.innerText = pc.status;
-                statusCell.className = `status-${pc.status.toLowerCase()}`;
-
-                const lastConn = pc.lastConnection ? new Date(pc.lastConnection).toLocaleString() : 'Never';
-                row.insertCell(3).innerText = lastConn;
-
-                const actionCell = row.insertCell(3);
-                const watchBtn = document.createElement('button');
-                watchBtn.innerText = 'Connect';
-                watchBtn.onclick = () => {
-                    window.location.href = `/watch.html?pcId=${pc.id}&pcName=${pc.name}`;
-                };
-                actionCell.appendChild(watchBtn);
+            const grid = document.getElementById('pcsGrid');
+            if (pcs.length === 0) {
+                grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;"><div style="font-size:64px;">💻</div><p>No computers found</p></div>';
+                return;
             }
-        } catch (error) {
-            console.error('Error loading PCs:', error);
-            document.getElementById('pcsBody').innerHTML = '<tr><td colspan="5">Error loading computers</td></tr>';
+            grid.innerHTML = pcs.map(pc => `
+                    <div class="pc-card fade-in-up" onclick="connect(${pc.id}, '${escape(pc.name)}')">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                            <div style="width:48px;height:48px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:16px;display:flex;align-items:center;justify-content:center;">💻</div>
+                            <span class="status-${getStatusClass(pc.status)}">${pc.status || 'OFFLINE'}</span>
+                        </div>
+                        <h3 style="font-size:20px;margin-bottom:6px;">${escape(pc.name)}</h3>
+                        <p style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:16px;">🔌 ${escape(pc.macAddress)}</p>
+                        <div style="border-top:1px solid rgba(255,255,255,0.1);margin:16px 0;"></div>
+                        <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
+                            <span>🕐 Last seen:</span>
+                            <span>${pc.lastConnection ? new Date(pc.lastConnection).toLocaleString() : 'Never'}</span>
+                        </div>
+                        <button class="btn-primary" style="width:100%;justify-content:center;" onclick="event.stopPropagation(); connect(${pc.id}, '${escape(pc.name)}')">🔌 Connect</button>
+                    </div>
+                `).join('');
+        } catch(e) {
+            console.error(e);
         }
     }
 
-    function logout() {
-        localStorage.removeItem('token');
-        window.location.href = '/login.html';
-    }
-
+    function escape(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m) { if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m; }); }
+    function connect(id, name) { window.location.href = `/watch.html?pcId=${id}&pcName=${encodeURIComponent(name)}`; }
+    function logout() { localStorage.removeItem('token'); window.location.href = '/login.html'; }
     loadPCs();
-    setInterval(loadPCs, 5000); // Обновляем список каждые 5 секунд
+    setInterval(loadPCs, 10000);
 </script>
 </body>
 </html>

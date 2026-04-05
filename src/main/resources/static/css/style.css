@@ -1,0 +1,270 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    color: white;
+}
+
+/* Glass card */
+.glass-card {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(12px);
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3);
+}
+
+/* Glass button */
+.btn-glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 18px;
+    border-radius: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-glass:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Primary button */
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+/* Input fields */
+.input-field {
+    width: 100%;
+    padding: 14px 18px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    font-size: 15px;
+    color: white;
+    transition: all 0.2s ease;
+}
+
+.input-field:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.input-field::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* Status badges */
+.status-online {
+    background: linear-gradient(135deg, #10b981, #059669);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-offline {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-sleep {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* PC Card */
+.pc-card {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    padding: 20px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pc-card:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.12);
+    border-color: #3b82f6;
+}
+
+/* Loading spinner */
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 3px solid rgba(59, 130, 246, 0.2);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Fade animation */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+/* Top bar */
+.top-bar {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Settings panel */
+.settings-panel {
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(16px);
+    border-radius: 20px;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.settings-select {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 10px 14px;
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.settings-select option {
+    background: #1e293b;
+}<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remote PC - My Computers</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="padding: 24px;">
+<div style="max-width: 1200px; margin: 0 auto;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+<div class="fade-in-up">
+<h1 style="font-size: 32px;">My Computers</h1>
+<p style="color: rgba(255,255,255,0.5);">Manage your remote devices</p>
+</div>
+<button onclick="logout()" class="btn-glass">🚪 Logout</button>
+</div>
+
+<div id="pcsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
+<div style="grid-column: 1/-1; text-align: center; padding: 60px;">
+<div class="loading-spinner" style="margin: 0 auto;"></div>
+<p style="margin-top: 20px;">Loading computers...</p>
+</div>
+</div>
+</div>
+
+<script>
+ const token = localStorage.getItem('token');
+if (!token) window.location.href = '/login.html';
+
+function getStatusClass(status) {
+return status ? status.toLowerCase() : 'offline';
+}
+
+async function loadPCs() {
+try {
+    const response = await fetch('/pcs', {
+    headers: { 'Authorization': `Bearer ${token}` }
+});
+if (response.status === 401 || response.status === 403) {
+localStorage.removeItem('token');
+window.location.href = '/login.html';
+return;
+}
+const pcs = await response.json();
+const grid = document.getElementById('pcsGrid');
+if (pcs.length === 0) {
+grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;"><div style="font-size:64px;">💻</div><p>No computers found</p></div>';
+return;
+}
+grid.innerHTML = pcs.map(pc => `
+<div class="pc-card fade-in-up" onclick="connect(${pc.id}, '${escape(pc.name)}')">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+<div style="width:48px;height:48px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:16px;display:flex;align-items:center;justify-content:center;">💻</div>
+<span class="status-${getStatusClass(pc.status)}">${pc.status || 'OFFLINE'}</span>
+</div>
+<h3 style="font-size:20px;margin-bottom:6px;">${escape(pc.name)}</h3>
+<p style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:16px;">🔌 ${escape(pc.macAddress)}</p>
+<div style="border-top:1px solid rgba(255,255,255,0.1);margin:16px 0;"></div>
+<div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
+<span>🕐 Last seen:</span>
+<span>${pc.lastConnection ? new Date(pc.lastConnection).toLocaleString() : 'Never'}</span>
+</div>
+<button class="btn-primary" style="width:100%;justify-content:center;" onclick="event.stopPropagation(); connect(${pc.id}, '${escape(pc.name)}')">🔌 Connect</button>
+</div>
+`).join('');
+} catch(e) {
+console.error(e);
+}
+}
+
+function escape(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m) { if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m; }); }
+function connect(id, name) { window.location.href = `/watch.html?pcId=${id}&pcName=${encodeURIComponent(name)}`; }
+function logout() { localStorage.removeItem('token'); window.location.href = '/login.html'; }
+loadPCs();
+setInterval(loadPCs, 10000);
+</script>
+</body>
+</html>
