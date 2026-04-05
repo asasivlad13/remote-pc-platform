@@ -95,7 +95,6 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         pc.setLastConnection(LocalDateTime.now());
         pcRepository.save(pc);
 
-        // Сохраняем сессию по PC ID для отправки команд
         agentSessionsByPcId.put(pc.getId(), session);
         System.out.println("Agent session stored for PC ID: " + pc.getId());
 
@@ -145,6 +144,16 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    public void sendNotificationToAgent(Long pcId, String message) throws Exception {
+        WebSocketSession agentSession = agentSessionsByPcId.get(pcId);
+        if (agentSession != null && agentSession.isOpen()) {
+            agentSession.sendMessage(new TextMessage("{\"type\":\"notification\",\"message\":\"" + message + "\"}"));
+            System.out.println("📢 Notification sent to agent for PC " + pcId);
+        } else {
+            System.out.println("Agent not connected for PC " + pcId + ", cannot send notification");
+        }
+    }
+
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         String mac = getMacBySession(session);
@@ -157,7 +166,6 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             agentSessions.remove(mac);
         }
 
-        // Удаляем из agentSessionsByPcId
         agentSessionsByPcId.values().remove(session);
 
         System.out.println("Agent disconnected: " + session.getId());

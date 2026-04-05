@@ -2,7 +2,12 @@ package com.remote.handler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.remote.model.ConnectionLog;
+import com.remote.model.Pc;
+import com.remote.repository.ConnectionLogRepository;
+import com.remote.repository.PcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -17,6 +22,12 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
 
     @Autowired
     private AgentWebSocketHandler agentWebSocketHandler;
+
+    @Autowired
+    private PcRepository pcRepository;
+
+    @Autowired
+    private ConnectionLogRepository connectionLogRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -43,6 +54,23 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
             clientWatching.put(session.getId(), pcId);
             System.out.println("Client " + session.getId() + " is watching PC " + pcId);
 
+            // Логируем подключение
+            try {
+                String username = SecurityContextHolder.getContext().getAuthentication().getName();
+                Pc pc = pcRepository.findById(pcId).orElse(null);
+                if (pc != null) {
+                    String clientIp = session.getRemoteAddress() != null ? session.getRemoteAddress().toString() : "unknown";
+                    connectionLogRepository.save(new ConnectionLog(username, pc.getName(), "CONNECT", clientIp));
+                    System.out.println("📝 Logged connection: " + username + " -> " + pc.getName());
+
+                    // Отправляем уведомление агенту
+                    agentWebSocketHandler.sendNotificationToAgent(pcId, username + " connected to your PC");
+                }
+            } catch (Exception e) {
+                System.err.println("Error logging connection: " + e.getMessage());
+            }
+
+            // Отправляем последний кадр, если есть
             String lastFrame = lastFrames.get(pcId);
             if (lastFrame != null) {
                 session.sendMessage(new TextMessage("{\"type\":\"frame\",\"image\":\"" + lastFrame + "\"}"));

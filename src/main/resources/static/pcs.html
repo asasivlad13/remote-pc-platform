@@ -8,12 +8,15 @@
 </head>
 <body style="padding: 24px;">
 <div style="max-width: 1200px; margin: 0 auto;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; flex-wrap: wrap; gap: 16px;">
         <div class="fade-in-up">
             <h1 style="font-size: 32px;">My Computers</h1>
             <p style="color: rgba(255,255,255,0.5);">Manage your remote devices</p>
         </div>
-        <button onclick="logout()" class="btn-glass">🚪 Logout</button>
+        <div style="display: flex; gap: 12px;">
+            <button onclick="location.href='/change-password.html'" class="btn-glass">🔒 Change Password</button>
+            <button onclick="logout()" class="btn-glass">🚪 Logout</button>
+        </div>
     </div>
 
     <div id="pcsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;">
