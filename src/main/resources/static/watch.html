@@ -14,6 +14,7 @@
     </div>
     <div style="display:flex;gap:10px;">
         <div style="color:#93c5fd;font-size:13px;display:none;gap:16px;" id="metrics"><span>📊 FPS: <span id="fps" style="color:#34d399;">0</span></span><span>⏱️ Latency: <span id="latency" style="color:#fbbf24;">0</span> ms</span></div>
+        <button id="controlModeBtn" class="btn-glass" style="background:rgba(16,185,129,0.2);border-color:rgba(16,185,129,0.5);">🎮 Control</button>
         <button id="settingsBtn" class="btn-glass">⚙️</button>
         <button id="fullscreenBtn" class="btn-glass">🖥️</button>
         <button id="disconnectBtn" class="btn-glass" style="background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.5);">⏻</button>
@@ -37,6 +38,11 @@
 
 <div id="statusBadge" style="position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:12px;color:#34d399;">🟢 Connected</div>
 
+<!-- Mode indicator -->
+<div id="modeIndicator" style="position:fixed;bottom:16px;left:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:11px;">
+    🎮 Control Mode Active
+</div>
+
 <script>
     const urlParams = new URLSearchParams(window.location.search);
     const pcId = urlParams.get('pcId');
@@ -50,6 +56,7 @@
     const ctx = canvas.getContext('2d');
 
     let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 24, frameInterval = 1000/24;
+    let controlMode = true; // true = Control (send input), false = View (no input)
 
     function getSize(r) { return { '360':{w:640,h:360},'480':{w:854,h:480},'720':{w:1280,h:720},'1080':{w:1920,h:1080},'1440':{w:2560,h:1440} }[r] || {w:1280,h:720}; }
 
@@ -88,12 +95,116 @@
     }
 
     let lastMouseMove = 0, lastClick = 0;
-    function sendCommand(action, data) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'command', pcId:parseInt(pcId), action, ...data })); }
+    function sendCommand(action, data) { if (ws && ws.readyState === WebSocket.OPEN && controlMode) ws.send(JSON.stringify({ type:'command', pcId:parseInt(pcId), action, ...data })); }
 
-    canvas.addEventListener('mousemove', (e) => { const now = Date.now(); if (now - lastMouseMove < 16) return; lastMouseMove = now; const rect = canvas.getBoundingClientRect(); const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height; const x = (e.clientX - rect.left) * scaleX; const y = (e.clientY - rect.top) * scaleY; sendCommand('MOUSE_MOVE', { x: Math.round(x), y: Math.round(y) }); });
-    canvas.addEventListener('click', (e) => { const now = Date.now(); if (now - lastClick < 200) return; lastClick = now; sendCommand('MOUSE_CLICK', { button: 1 }); });
-    document.addEventListener('keydown', (e) => { if (e.target.tagName === 'SELECT') return; sendCommand('KEY_PRESS', { keyCode: e.keyCode }); e.preventDefault(); });
+    // Toggle control mode
+    function toggleControlMode() {
+        controlMode = !controlMode;
+        const btn = document.getElementById('controlModeBtn');
+        const indicator = document.getElementById('modeIndicator');
+        if (controlMode) {
+            btn.innerHTML = '🎮 Control';
+            btn.style.background = 'rgba(16,185,129,0.2)';
+            btn.style.borderColor = 'rgba(16,185,129,0.5)';
+            indicator.innerHTML = '🎮 Control Mode Active - Keyboard & Mouse enabled';
+            indicator.style.color = '#34d399';
+        } else {
+            btn.innerHTML = '👁️ View';
+            btn.style.background = 'rgba(245,158,11,0.2)';
+            btn.style.borderColor = 'rgba(245,158,11,0.5)';
+            indicator.innerHTML = '👁️ View Mode - Keyboard & Mouse disabled (use Esc to exit fullscreen)';
+            indicator.style.color = '#fbbf24';
+        }
+        setTimeout(() => {
+            indicator.style.opacity = '1';
+            setTimeout(() => { indicator.style.opacity = '0.7'; }, 2000);
+        }, 100);
+    }
 
+    // Mouse events (only in control mode)
+    canvas.addEventListener('mousemove', (e) => {
+        if (!controlMode) return;
+        const now = Date.now();
+        if (now - lastMouseMove < 16) return;
+        lastMouseMove = now;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        sendCommand('MOUSE_MOVE', { x: Math.round(x), y: Math.round(y) });
+    });
+
+    canvas.addEventListener('click', (e) => {
+        if (!controlMode) return;
+        const now = Date.now();
+        if (now - lastClick < 200) return;
+        lastClick = now;
+        sendCommand('MOUSE_CLICK', { button: 1 });
+    });
+
+    // Keyboard events - FULL CONTROL with mode check
+    document.addEventListener('keydown', (e) => {
+        // Always allow Escape to exit fullscreen even in view mode
+        if (e.key === 'Escape' && document.fullscreenElement) {
+            document.exitFullscreen();
+            e.preventDefault();
+            return;
+        }
+
+        // If not in control mode, don't send commands but still prevent default?
+        if (!controlMode) {
+            // Don't prevent default in view mode - allow local shortcuts
+            return;
+        }
+
+        // Prevent default behavior on local computer when in control mode
+        e.preventDefault();
+        e.stopPropagation();
+
+        const ctrl = e.ctrlKey;
+        const alt = e.altKey;
+        const shift = e.shiftKey;
+        const meta = e.metaKey;
+
+        // Ctrl+Alt+Del special handling
+        if (ctrl && alt && e.key === 'Delete') {
+            sendCommand('KEY_COMBO', { keys: ['CONTROL', 'ALT', 'DELETE'] });
+            return;
+        }
+
+        // Windows key
+        if (meta) {
+            sendCommand('KEY_PRESS', { keyCode: 91 });
+            return;
+        }
+
+        sendCommand('KEY_PRESS', {
+            keyCode: e.keyCode,
+            ctrl: ctrl,
+            alt: alt,
+            shift: shift
+        });
+    });
+
+    // Key release (only in control mode)
+    document.addEventListener('keyup', (e) => {
+        if (!controlMode) return;
+        e.preventDefault();
+        e.stopPropagation();
+        sendCommand('KEY_RELEASE', { keyCode: e.keyCode });
+    });
+
+    // Prevent context menu on right click (only in control mode)
+    canvas.addEventListener('contextmenu', (e) => {
+        if (!controlMode) return;
+        e.preventDefault();
+        sendCommand('MOUSE_CLICK', { button: 3 });
+        return false;
+    });
+
+    // UI Controls
+    document.getElementById('controlModeBtn').onclick = toggleControlMode;
     document.getElementById('settingsBtn').onclick = () => { const p = document.getElementById('settingsPanel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; };
     document.getElementById('applySettingsBtn').onclick = () => { applySettings(); document.getElementById('settingsPanel').style.display = 'none'; };
     document.getElementById('fullscreenBtn').onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
