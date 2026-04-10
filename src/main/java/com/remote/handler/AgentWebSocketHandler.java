@@ -68,6 +68,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         String pcName = json.get("pcName").asText();
         String mac = json.get("mac").asText();
 
+        // Проверяем токен
         if (!jwtUtil.validateToken(token)) {
             session.sendMessage(new TextMessage("{\"error\":\"Invalid token\"}"));
             session.close();
@@ -83,18 +84,33 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        // Ищем ПК по MAC (уникальный идентификатор)
         Pc pc = pcRepository.findByMacAddress(mac);
         if (pc == null) {
+            // Новый ПК
             pc = new Pc();
             pc.setName(pcName);
             pc.setMacAddress(mac);
             pc.setUser(user);
+            System.out.println("Creating new PC record for MAC: " + mac);
+        } else {
+            // Существующий ПК - обновляем имя (если изменилось)
+            if (!pc.getName().equals(pcName)) {
+                pc.setName(pcName);
+                System.out.println("Updating PC name from '" + pc.getName() + "' to '" + pcName + "'");
+            }
+            // Убеждаемся, что ПК привязан к правильному пользователю
+            if (pc.getUser() == null || !pc.getUser().getId().equals(user.getId())) {
+                pc.setUser(user);
+                System.out.println("Re-assigning PC to user: " + username);
+            }
         }
 
         pc.setStatus(PcStatus.ONLINE);
         pc.setLastConnection(LocalDateTime.now());
         pcRepository.save(pc);
 
+        // Сохраняем сессию по PC ID для отправки команд
         agentSessionsByPcId.put(pc.getId(), session);
         System.out.println("Agent session stored for PC ID: " + pc.getId());
 
@@ -110,6 +126,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             Pc pc = pcRepository.findByMacAddress(mac);
             if (pc != null) {
                 pc.setLastConnection(LocalDateTime.now());
+                pc.setStatus(PcStatus.ONLINE); // Убеждаемся, что статус ONLINE
                 pcRepository.save(pc);
                 System.out.println("Heartbeat from: " + mac);
             }
@@ -162,6 +179,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             if (pc != null) {
                 pc.setStatus(PcStatus.OFFLINE);
                 pcRepository.save(pc);
+                System.out.println("PC " + pc.getName() + " (" + mac + ") set to OFFLINE");
             }
             agentSessions.remove(mac);
         }
