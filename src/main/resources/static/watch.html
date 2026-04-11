@@ -39,8 +39,8 @@
         <select id="fpsSelect" class="settings-select" style="width:100%;margin-top:6px;">
             <option value="15">15 FPS</option>
             <option value="24">24 FPS</option>
-            <option value="30">30 FPS</option>
-            <option value="60" selected>60 FPS</option>
+            <option value="30" selected>30 FPS</option>
+            <option value="60">60 FPS</option>
         </select>
     </div>
     <button id="applySettingsBtn" class="btn-primary" style="width:100%;justify-content:center;">Apply</button>
@@ -72,7 +72,7 @@
     const canvas = document.getElementById('videoCanvas');
     const ctx = canvas.getContext('2d');
 
-    let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 60, frameInterval = 1000/60;
+    let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 30, frameInterval = 1000/30;
     let controlMode = true;
     let remoteScreenWidth = 1920;
     let remoteScreenHeight = 1080;
@@ -126,6 +126,10 @@
     function connect() {
         document.getElementById('loadingOverlay').style.display = 'flex';
         ws = new WebSocket(WS_URL);
+
+        // Настройка для приёма бинарных данных
+        ws.binaryType = 'arraybuffer';
+
         ws.onopen = () => {
             console.log('WebSocket connected to', WS_URL);
             document.getElementById('loadingOverlay').style.display = 'none';
@@ -134,34 +138,74 @@
             console.log('Watch sent for PC ID:', pcId);
             setTimeout(applySettings, 500);
         };
-        ws.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.type === 'frame') {
-                const now = Date.now();
-                if (now - lastFrameReceived >= frameInterval) {
-                    lastFrameReceived = now;
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                        frameCount++;
-                        const now2 = Date.now();
-                        if (now2 - lastTime >= 1000) {
-                            document.getElementById('fps').innerText = frameCount;
-                            frameCount = 0;
-                            lastTime = now2;
-                        }
-                        document.getElementById('latency').innerText = now2 - lastFrameTime;
-                        lastFrameTime = now2;
-                    };
-                    img.src = `data:image/jpeg;base64,${data.image}`;
+
+        ws.onmessage = (event) => {
+            // Обработка бинарных данных (WebP/JPEG кадры)
+            if (event.data instanceof ArrayBuffer) {
+                const bytes = new Uint8Array(event.data);
+                // Определяем тип изображения по первым байтам
+                let mimeType = 'image/jpeg';
+                if (bytes.length > 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+                    mimeType = 'image/webp';
+                }
+
+                const blob = new Blob([bytes], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    URL.revokeObjectURL(url);
+
+                    frameCount++;
+                    const now = Date.now();
+                    if (now - lastTime >= 1000) {
+                        document.getElementById('fps').innerText = frameCount;
+                        frameCount = 0;
+                        lastTime = now;
+                    }
+                    document.getElementById('latency').innerText = now - lastFrameTime;
+                    lastFrameTime = now;
+                };
+                img.onerror = () => {
+                    console.error('Failed to decode image');
+                    URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            }
+            // Обработка JSON сообщений (команды, статусы, настройки)
+            else if (typeof event.data === 'string') {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'frame') {
+                        // Совместимость со старым форматом (Base64)
+                        const img = new Image();
+                        img.onload = () => {
+                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                            frameCount++;
+                            const now = Date.now();
+                            if (now - lastTime >= 1000) {
+                                document.getElementById('fps').innerText = frameCount;
+                                frameCount = 0;
+                                lastTime = now;
+                            }
+                            document.getElementById('latency').innerText = now - lastFrameTime;
+                            lastFrameTime = now;
+                        };
+                        img.src = `data:image/jpeg;base64,${data.image}`;
+                    }
+                } catch(e) {
+                    console.log('Non-JSON message:', event.data);
                 }
             }
         };
+
         ws.onclose = () => {
             console.log('WebSocket closed');
             document.getElementById('statusBadge').innerHTML = '🟡 Reconnecting...';
             setTimeout(connect, 3000);
         };
+
         ws.onerror = (err) => {
             console.error('WebSocket error:', err);
             document.getElementById('statusBadge').innerHTML = '🔴 Error';
@@ -219,7 +263,6 @@
         sendCommand('MOUSE_CLICK', { button: 1 });
     });
 
-    // Mouse wheel
     canvas.addEventListener('wheel', (e) => {
         if (!controlMode) return;
         const now = Date.now();
@@ -230,23 +273,20 @@
         sendCommand('MOUSE_WHEEL', { delta: delta });
     });
 
-    // Keyboard events with special keys
+    // Keyboard events
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && document.fullscreenElement) {
             document.exitFullscreen();
             e.preventDefault();
             return;
         }
-
         if (!controlMode) return;
-
         e.preventDefault();
         e.stopPropagation();
 
         if (e.key === 'F4' && e.altKey) return;
         if (e.key === 'Delete' && e.ctrlKey && e.altKey) return;
 
-        // Special keys mapping
         let keyCode = e.keyCode;
         const specialKeys = {
             'Delete': 46, 'Insert': 45, 'Home': 36, 'End': 35,

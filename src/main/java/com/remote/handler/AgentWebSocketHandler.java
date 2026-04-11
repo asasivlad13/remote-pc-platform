@@ -10,6 +10,7 @@ import com.remote.repository.PcRepository;
 import com.remote.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -30,6 +31,9 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private WebSocketClientHandler webSocketClientHandler;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Map<String, WebSocketSession> agentSessions = new ConcurrentHashMap<>();
@@ -63,12 +67,26 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    @Override
+    protected void handleBinaryMessage(WebSocketSession session, BinaryMessage message) {
+        byte[] imageData = new byte[message.getPayload().remaining()];
+        message.getPayload().get(imageData);
+
+        String mac = getMacBySession(session);
+        if (mac != null) {
+            Pc pc = pcRepository.findByMacAddress(mac);
+            if (pc != null) {
+                webSocketClientHandler.broadcastBinaryFrame(pc.getId(), imageData);
+                System.out.println("📸 Binary frame (" + imageData.length + " bytes) from " + mac);
+            }
+        }
+    }
+
     private void handleRegister(WebSocketSession session, JsonNode json) throws Exception {
         String token = json.get("token").asText();
         String pcName = json.get("pcName").asText();
         String mac = json.get("mac").asText();
 
-        // Проверяем токен
         if (!jwtUtil.validateToken(token)) {
             session.sendMessage(new TextMessage("{\"error\":\"Invalid token\"}"));
             session.close();
@@ -84,42 +102,34 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        // Ищем ПК по MAC (уникальный идентификатор)
         Pc pc = pcRepository.findByMacAddress(mac);
         if (pc == null) {
-            // Новый ПК
             pc = new Pc();
             pc.setName(pcName);
             pc.setMacAddress(mac);
             pc.setUser(user);
             System.out.println("Creating new PC record for MAC: " + mac);
         } else {
-            // Существующий ПК - обновляем имя (если изменилось)
             if (!pc.getName().equals(pcName)) {
                 pc.setName(pcName);
                 System.out.println("Updating PC name from '" + pc.getName() + "' to '" + pcName + "'");
             }
-            // Убеждаемся, что ПК привязан к правильному пользователю
             if (pc.getUser() == null || !pc.getUser().getId().equals(user.getId())) {
                 pc.setUser(user);
                 System.out.println("Re-assigning PC to user: " + username);
             }
         }
 
-        // Сохраняем размер экрана
         if (json.has("screenWidth") && json.has("screenHeight")) {
-            int screenWidth = json.get("screenWidth").asInt();
-            int screenHeight = json.get("screenHeight").asInt();
-            pc.setScreenWidth(screenWidth);
-            pc.setScreenHeight(screenHeight);
-            System.out.println("Screen size saved: " + screenWidth + "x" + screenHeight);
+            pc.setScreenWidth(json.get("screenWidth").asInt());
+            pc.setScreenHeight(json.get("screenHeight").asInt());
+            System.out.println("Screen size saved: " + pc.getScreenWidth() + "x" + pc.getScreenHeight());
         }
 
         pc.setStatus(PcStatus.ONLINE);
         pc.setLastConnection(LocalDateTime.now());
         pcRepository.save(pc);
 
-        // Сохраняем сессию по PC ID для отправки команд
         agentSessionsByPcId.put(pc.getId(), session);
         System.out.println("Agent session stored for PC ID: " + pc.getId());
 

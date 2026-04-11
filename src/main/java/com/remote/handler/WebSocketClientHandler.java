@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -110,5 +111,20 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
         sessions.remove(session.getId());
         clientWatching.remove(session.getId());
         System.out.println("Web client disconnected: " + session.getId());
+    }
+
+    public void broadcastBinaryFrame(Long pcId, byte[] imageData) {
+        for (Map.Entry<String, Long> entry : clientWatching.entrySet()) {
+            if (entry.getValue().equals(pcId)) {
+                WebSocketSession session = sessions.get(entry.getKey());
+                if (session != null && session.isOpen()) {
+                    try {
+                        session.sendMessage(new BinaryMessage(imageData));
+                    } catch (Exception e) {
+                        System.err.println("Error sending binary frame: " + e.getMessage());
+                    }
+                }
+            }
+        }
     }
 }
