@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Remote PC - Remote Access</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -21,10 +21,28 @@
     </div>
 </div>
 
-<div id="settingsPanel" class="settings-panel" style="position:fixed;top:70px;right:20px;width:260px;padding:20px;z-index:200;display:none;">
-    <h3 style="margin-bottom:16px;">Video Settings</h3>
-    <div style="margin-bottom:16px;"><label style="color:#93c5fd;font-size:13px;">Resolution</label><select id="resolutionSelect" class="settings-select" style="width:100%;margin-top:6px;"><option value="360">360p</option><option value="480">480p</option><option value="720" selected>720p</option><option value="1080">1080p</option><option value="1440">1440p</option></select></div>
-    <div style="margin-bottom:20px;"><label style="color:#93c5fd;font-size:13px;">Frame Rate</label><select id="fpsSelect" class="settings-select" style="width:100%;margin-top:6px;"><option value="15">15 FPS</option><option value="24" selected>24 FPS</option><option value="30">30 FPS</option><option value="60">60 FPS</option></select></div>
+<div id="settingsPanel" class="settings-panel" style="position:fixed;top:70px;right:20px;width:280px;padding:20px;z-index:200;display:none;">
+    <h3 style="margin-bottom:16px;">⚙️ Video Settings</h3>
+    <div style="margin-bottom:16px;">
+        <label style="color:#93c5fd;font-size:13px;">Resolution</label>
+        <select id="resolutionSelect" class="settings-select" style="width:100%;margin-top:6px;">
+            <option value="360">360p (640x360)</option>
+            <option value="480">480p (854x480)</option>
+            <option value="720" selected>720p (1280x720)</option>
+            <option value="1080">1080p (1920x1080)</option>
+            <option value="1440">1440p (2560x1440)</option>
+            <option value="2160">4K (3840x2160)</option>
+        </select>
+    </div>
+    <div style="margin-bottom:20px;">
+        <label style="color:#93c5fd;font-size:13px;">Frame Rate</label>
+        <select id="fpsSelect" class="settings-select" style="width:100%;margin-top:6px;">
+            <option value="15">15 FPS (Low)</option>
+            <option value="24" selected>24 FPS (Medium)</option>
+            <option value="30">30 FPS (High)</option>
+            <option value="60">60 FPS (Ultra)</option>
+        </select>
+    </div>
     <button id="applySettingsBtn" class="btn-primary" style="width:100%;justify-content:center;">Apply</button>
 </div>
 
@@ -56,17 +74,30 @@
     const ctx = canvas.getContext('2d');
 
     let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 24, frameInterval = 1000/24;
-    let controlMode = true; // true = Control (send input), false = View (no input)
+    let controlMode = true;
 
-    function getSize(r) { return { '360':{w:640,h:360},'480':{w:854,h:480},'720':{w:1280,h:720},'1080':{w:1920,h:1080},'1440':{w:2560,h:1440} }[r] || {w:1280,h:720}; }
+    function getSize(r) {
+        const sizes = {
+            '360': { w: 640, h: 360 },
+            '480': { w: 854, h: 480 },
+            '720': { w: 1280, h: 720 },
+            '1080': { w: 1920, h: 1080 },
+            '1440': { w: 2560, h: 1440 },
+            '2160': { w: 3840, h: 2160 }
+        };
+        return sizes[r] || sizes['720'];
+    }
 
     function applySettings() {
         currentResolution = document.getElementById('resolutionSelect').value;
         currentFps = parseInt(document.getElementById('fpsSelect').value);
         frameInterval = 1000 / currentFps;
         const s = getSize(currentResolution);
-        canvas.width = s.w; canvas.height = s.h;
-        if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'settings', pcId:parseInt(pcId), resolution:currentResolution, fps:currentFps }));
+        canvas.width = s.w;
+        canvas.height = s.h;
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'settings', pcId: parseInt(pcId), resolution: currentResolution, fps: currentFps }));
+        }
     }
 
     function connect() {
@@ -75,7 +106,7 @@
         ws.onopen = () => {
             document.getElementById('loadingOverlay').style.display = 'none';
             document.getElementById('metrics').style.display = 'flex';
-            ws.send(JSON.stringify({ type:'watch', pcId:parseInt(pcId) }));
+            ws.send(JSON.stringify({ type: 'watch', pcId: parseInt(pcId) }));
             setTimeout(applySettings, 500);
         };
         ws.onmessage = (e) => {
@@ -85,19 +116,38 @@
                 if (now - lastFrameReceived >= frameInterval) {
                     lastFrameReceived = now;
                     const img = new Image();
-                    img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width, canvas.height); frameCount++; const now2 = Date.now(); if (now2 - lastTime >= 1000) { document.getElementById('fps').innerText = frameCount; frameCount = 0; lastTime = now2; } document.getElementById('latency').innerText = now2 - lastFrameTime; lastFrameTime = now2; };
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        frameCount++;
+                        const now2 = Date.now();
+                        if (now2 - lastTime >= 1000) {
+                            document.getElementById('fps').innerText = frameCount;
+                            frameCount = 0;
+                            lastTime = now2;
+                        }
+                        document.getElementById('latency').innerText = now2 - lastFrameTime;
+                        lastFrameTime = now2;
+                    };
                     img.src = `data:image/jpeg;base64,${data.image}`;
                 }
             }
         };
-        ws.onclose = () => { document.getElementById('statusBadge').innerHTML = '🟡 Reconnecting...'; setTimeout(connect, 3000); };
-        ws.onerror = () => { document.getElementById('statusBadge').innerHTML = '🔴 Error'; };
+        ws.onclose = () => {
+            document.getElementById('statusBadge').innerHTML = '🟡 Reconnecting...';
+            setTimeout(connect, 3000);
+        };
+        ws.onerror = () => {
+            document.getElementById('statusBadge').innerHTML = '🔴 Error';
+        };
     }
 
     let lastMouseMove = 0, lastClick = 0;
-    function sendCommand(action, data) { if (ws && ws.readyState === WebSocket.OPEN && controlMode) ws.send(JSON.stringify({ type:'command', pcId:parseInt(pcId), action, ...data })); }
+    function sendCommand(action, data) {
+        if (ws && ws.readyState === WebSocket.OPEN && controlMode) {
+            ws.send(JSON.stringify({ type: 'command', pcId: parseInt(pcId), action: action, ...data }));
+        }
+    }
 
-    // Toggle control mode
     function toggleControlMode() {
         controlMode = !controlMode;
         const btn = document.getElementById('controlModeBtn');
@@ -121,7 +171,7 @@
         }, 100);
     }
 
-    // Mouse events (only in control mode)
+    // Mouse events
     canvas.addEventListener('mousemove', (e) => {
         if (!controlMode) return;
         const now = Date.now();
@@ -143,22 +193,14 @@
         sendCommand('MOUSE_CLICK', { button: 1 });
     });
 
-    // Keyboard events - FULL CONTROL with mode check
+    // Keyboard events
     document.addEventListener('keydown', (e) => {
-        // Always allow Escape to exit fullscreen even in view mode
         if (e.key === 'Escape' && document.fullscreenElement) {
             document.exitFullscreen();
             e.preventDefault();
             return;
         }
-
-        // If not in control mode, don't send commands but still prevent default?
-        if (!controlMode) {
-            // Don't prevent default in view mode - allow local shortcuts
-            return;
-        }
-
-        // Prevent default behavior on local computer when in control mode
+        if (!controlMode) return;
         e.preventDefault();
         e.stopPropagation();
 
@@ -167,27 +209,17 @@
         const shift = e.shiftKey;
         const meta = e.metaKey;
 
-        // Ctrl+Alt+Del special handling
         if (ctrl && alt && e.key === 'Delete') {
             sendCommand('KEY_COMBO', { keys: ['CONTROL', 'ALT', 'DELETE'] });
             return;
         }
-
-        // Windows key
         if (meta) {
             sendCommand('KEY_PRESS', { keyCode: 91 });
             return;
         }
-
-        sendCommand('KEY_PRESS', {
-            keyCode: e.keyCode,
-            ctrl: ctrl,
-            alt: alt,
-            shift: shift
-        });
+        sendCommand('KEY_PRESS', { keyCode: e.keyCode, ctrl: ctrl, alt: alt, shift: shift });
     });
 
-    // Key release (only in control mode)
     document.addEventListener('keyup', (e) => {
         if (!controlMode) return;
         e.preventDefault();
@@ -195,7 +227,6 @@
         sendCommand('KEY_RELEASE', { keyCode: e.keyCode });
     });
 
-    // Prevent context menu on right click (only in control mode)
     canvas.addEventListener('contextmenu', (e) => {
         if (!controlMode) return;
         e.preventDefault();
@@ -205,13 +236,26 @@
 
     // UI Controls
     document.getElementById('controlModeBtn').onclick = toggleControlMode;
-    document.getElementById('settingsBtn').onclick = () => { const p = document.getElementById('settingsPanel'); p.style.display = p.style.display === 'none' ? 'block' : 'none'; };
-    document.getElementById('applySettingsBtn').onclick = () => { applySettings(); document.getElementById('settingsPanel').style.display = 'none'; };
-    document.getElementById('fullscreenBtn').onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
-    document.getElementById('disconnectBtn').onclick = () => { if (ws) ws.close(); window.location.href = '/pcs.html'; };
+    document.getElementById('settingsBtn').onclick = () => {
+        const p = document.getElementById('settingsPanel');
+        p.style.display = p.style.display === 'none' ? 'block' : 'none';
+    };
+    document.getElementById('applySettingsBtn').onclick = () => {
+        applySettings();
+        document.getElementById('settingsPanel').style.display = 'none';
+    };
+    document.getElementById('fullscreenBtn').onclick = () => {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+    };
+    document.getElementById('disconnectBtn').onclick = () => {
+        if (ws) ws.close();
+        window.location.href = '/pcs.html';
+    };
 
     const s = getSize('720');
-    canvas.width = s.w; canvas.height = s.h;
+    canvas.width = s.w;
+    canvas.height = s.h;
     connect();
 </script>
 </body>

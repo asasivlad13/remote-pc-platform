@@ -7,6 +7,7 @@ import com.remote.model.Pc;
 import com.remote.repository.ConnectionLogRepository;
 import com.remote.repository.PcRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -54,16 +55,15 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
             clientWatching.put(session.getId(), pcId);
             System.out.println("Client " + session.getId() + " is watching PC " + pcId);
 
-            // Логируем подключение
+            // Логируем подключение (с проверкой на null)
             try {
-                String username = SecurityContextHolder.getContext().getAuthentication().getName();
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                String username = (auth != null) ? auth.getName() : "unknown";
                 Pc pc = pcRepository.findById(pcId).orElse(null);
                 if (pc != null) {
                     String clientIp = session.getRemoteAddress() != null ? session.getRemoteAddress().toString() : "unknown";
                     connectionLogRepository.save(new ConnectionLog(username, pc.getName(), "CONNECT", clientIp));
                     System.out.println("📝 Logged connection: " + username + " -> " + pc.getName());
-
-                    // Отправляем уведомление агенту
                     agentWebSocketHandler.sendNotificationToAgent(pcId, username + " connected to your PC");
                 }
             } catch (Exception e) {
