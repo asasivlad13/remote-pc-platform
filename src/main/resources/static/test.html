@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head><title>WebSocket Test</title></head>
+<body>
+<h2>WebSocket Test</h2>
+<div id="status">Testing...</div>
+<script>
+    const ws = new WebSocket('ws://192.168.50.22:8080/ws/client');
+    ws.onopen = () => document.getElementById('status').innerHTML = '✅ WebSocket CONNECTED!';
+    ws.onerror = (e) => document.getElementById('status').innerHTML = '❌ WebSocket ERROR';
+    ws.onclose = () => document.getElementById('status').innerHTML = '🔌 WebSocket CLOSED';
+</script>
+</body>
+</html>

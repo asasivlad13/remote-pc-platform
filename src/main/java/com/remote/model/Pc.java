@@ -2,6 +2,7 @@ package com.remote.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "pcs")
@@ -18,9 +19,15 @@ public class Pc {
 
     private LocalDateTime lastConnection;
 
+    private Integer screenWidth;
+    private Integer screenHeight;
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
+
+    @OneToMany(mappedBy = "pc", cascade = CascadeType.ALL)
+    private List<ConnectionLog> connectionLogs;
 
     // Конструкторы
     public Pc() {}
@@ -48,6 +55,15 @@ public class Pc {
     public LocalDateTime getLastConnection() { return lastConnection; }
     public void setLastConnection(LocalDateTime lastConnection) { this.lastConnection = lastConnection; }
 
+    public Integer getScreenWidth() { return screenWidth; }
+    public void setScreenWidth(Integer screenWidth) { this.screenWidth = screenWidth; }
+
+    public Integer getScreenHeight() { return screenHeight; }
+    public void setScreenHeight(Integer screenHeight) { this.screenHeight = screenHeight; }
+
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
+
+    public List<ConnectionLog> getConnectionLogs() { return connectionLogs; }
+    public void setConnectionLogs(List<ConnectionLog> connectionLogs) { this.connectionLogs = connectionLogs; }
 }

@@ -37,10 +37,10 @@
     <div style="margin-bottom:20px;">
         <label style="color:#93c5fd;font-size:13px;">Frame Rate</label>
         <select id="fpsSelect" class="settings-select" style="width:100%;margin-top:6px;">
-            <option value="15">15 FPS (Low)</option>
-            <option value="24" selected>24 FPS (Medium)</option>
-            <option value="30">30 FPS (High)</option>
-            <option value="60">60 FPS (Ultra)</option>
+            <option value="15">15 FPS</option>
+            <option value="24">24 FPS</option>
+            <option value="30">30 FPS</option>
+            <option value="60" selected>60 FPS</option>
         </select>
     </div>
     <button id="applySettingsBtn" class="btn-primary" style="width:100%;justify-content:center;">Apply</button>
@@ -56,7 +56,6 @@
 
 <div id="statusBadge" style="position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:12px;color:#34d399;">🟢 Connected</div>
 
-<!-- Mode indicator -->
 <div id="modeIndicator" style="position:fixed;bottom:16px;left:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:11px;">
     🎮 Control Mode Active
 </div>
@@ -73,8 +72,32 @@
     const canvas = document.getElementById('videoCanvas');
     const ctx = canvas.getContext('2d');
 
-    let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 24, frameInterval = 1000/24;
+    let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 60, frameInterval = 1000/60;
     let controlMode = true;
+    let remoteScreenWidth = 1920;
+    let remoteScreenHeight = 1080;
+
+    async function getRemoteScreenSize() {
+        try {
+            const response = await fetch(`/pcs/${pcId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const pc = await response.json();
+            if (pc.screenWidth && pc.screenHeight) {
+                remoteScreenWidth = pc.screenWidth;
+                remoteScreenHeight = pc.screenHeight;
+                console.log('Remote screen size:', remoteScreenWidth, 'x', remoteScreenHeight);
+            }
+        } catch(e) {
+            console.error('Failed to get remote screen size', e);
+        }
+    }
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.hostname;
+    const wsPort = 8080;
+    const WS_URL = `${wsProtocol}//${wsHost}:${wsPort}/ws/client`;
+    console.log('WebSocket URL:', WS_URL);
 
     function getSize(r) {
         const sizes = {
@@ -102,11 +125,13 @@
 
     function connect() {
         document.getElementById('loadingOverlay').style.display = 'flex';
-        ws = new WebSocket(`ws://localhost:8080/ws/client`);
+        ws = new WebSocket(WS_URL);
         ws.onopen = () => {
+            console.log('WebSocket connected to', WS_URL);
             document.getElementById('loadingOverlay').style.display = 'none';
             document.getElementById('metrics').style.display = 'flex';
             ws.send(JSON.stringify({ type: 'watch', pcId: parseInt(pcId) }));
+            console.log('Watch sent for PC ID:', pcId);
             setTimeout(applySettings, 500);
         };
         ws.onmessage = (e) => {
@@ -133,15 +158,17 @@
             }
         };
         ws.onclose = () => {
+            console.log('WebSocket closed');
             document.getElementById('statusBadge').innerHTML = '🟡 Reconnecting...';
             setTimeout(connect, 3000);
         };
-        ws.onerror = () => {
+        ws.onerror = (err) => {
+            console.error('WebSocket error:', err);
             document.getElementById('statusBadge').innerHTML = '🔴 Error';
         };
     }
 
-    let lastMouseMove = 0, lastClick = 0;
+    let lastMouseMove = 0, lastClick = 0, lastWheel = 0;
     function sendCommand(action, data) {
         if (ws && ws.readyState === WebSocket.OPEN && controlMode) {
             ws.send(JSON.stringify({ type: 'command', pcId: parseInt(pcId), action: action, ...data }));
@@ -165,24 +192,23 @@
             indicator.innerHTML = '👁️ View Mode - Keyboard & Mouse disabled (use Esc to exit fullscreen)';
             indicator.style.color = '#fbbf24';
         }
-        setTimeout(() => {
-            indicator.style.opacity = '1';
-            setTimeout(() => { indicator.style.opacity = '0.7'; }, 2000);
-        }, 100);
     }
 
-    // Mouse events
+    // Mouse move with scaling
     canvas.addEventListener('mousemove', (e) => {
         if (!controlMode) return;
         const now = Date.now();
         if (now - lastMouseMove < 16) return;
         lastMouseMove = now;
+
         const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
-        sendCommand('MOUSE_MOVE', { x: Math.round(x), y: Math.round(y) });
+        const canvasX = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const canvasY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+        const remoteX = Math.round(canvasX / canvas.width * remoteScreenWidth);
+        const remoteY = Math.round(canvasY / canvas.height * remoteScreenHeight);
+
+        sendCommand('MOUSE_MOVE', { x: Math.max(0, Math.min(remoteX, remoteScreenWidth)), y: Math.max(0, Math.min(remoteY, remoteScreenHeight)) });
     });
 
     canvas.addEventListener('click', (e) => {
@@ -193,38 +219,71 @@
         sendCommand('MOUSE_CLICK', { button: 1 });
     });
 
-    // Keyboard events
+    // Mouse wheel
+    canvas.addEventListener('wheel', (e) => {
+        if (!controlMode) return;
+        const now = Date.now();
+        if (now - lastWheel < 50) return;
+        lastWheel = now;
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -1 : 1;
+        sendCommand('MOUSE_WHEEL', { delta: delta });
+    });
+
+    // Keyboard events with special keys
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && document.fullscreenElement) {
             document.exitFullscreen();
             e.preventDefault();
             return;
         }
+
         if (!controlMode) return;
+
         e.preventDefault();
         e.stopPropagation();
+
+        if (e.key === 'F4' && e.altKey) return;
+        if (e.key === 'Delete' && e.ctrlKey && e.altKey) return;
+
+        // Special keys mapping
+        let keyCode = e.keyCode;
+        const specialKeys = {
+            'Delete': 46, 'Insert': 45, 'Home': 36, 'End': 35,
+            'PageUp': 33, 'PageDown': 34, 'ArrowUp': 38, 'ArrowDown': 40,
+            'ArrowLeft': 37, 'ArrowRight': 39, 'F1': 112, 'F2': 113,
+            'F3': 114, 'F4': 115, 'F5': 116, 'F6': 117, 'F7': 118,
+            'F8': 119, 'F9': 120, 'F10': 121, 'F11': 122, 'F12': 123
+        };
+        if (specialKeys[e.key]) keyCode = specialKeys[e.key];
 
         const ctrl = e.ctrlKey;
         const alt = e.altKey;
         const shift = e.shiftKey;
         const meta = e.metaKey;
 
-        if (ctrl && alt && e.key === 'Delete') {
-            sendCommand('KEY_COMBO', { keys: ['CONTROL', 'ALT', 'DELETE'] });
-            return;
-        }
         if (meta) {
             sendCommand('KEY_PRESS', { keyCode: 91 });
             return;
         }
-        sendCommand('KEY_PRESS', { keyCode: e.keyCode, ctrl: ctrl, alt: alt, shift: shift });
+
+        sendCommand('KEY_PRESS', { keyCode: keyCode, ctrl: ctrl, alt: alt, shift: shift });
     });
 
     document.addEventListener('keyup', (e) => {
         if (!controlMode) return;
         e.preventDefault();
         e.stopPropagation();
-        sendCommand('KEY_RELEASE', { keyCode: e.keyCode });
+
+        let keyCode = e.keyCode;
+        const specialKeys = {
+            'Delete': 46, 'Insert': 45, 'Home': 36, 'End': 35,
+            'PageUp': 33, 'PageDown': 34, 'ArrowUp': 38, 'ArrowDown': 40,
+            'ArrowLeft': 37, 'ArrowRight': 39
+        };
+        if (specialKeys[e.key]) keyCode = specialKeys[e.key];
+
+        sendCommand('KEY_RELEASE', { keyCode: keyCode });
     });
 
     canvas.addEventListener('contextmenu', (e) => {
@@ -253,6 +312,8 @@
         window.location.href = '/pcs.html';
     };
 
+    // Initialize
+    getRemoteScreenSize();
     const s = getSize('720');
     canvas.width = s.w;
     canvas.height = s.h;

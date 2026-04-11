@@ -12,9 +12,13 @@ public class ConnectionLog {
 
     private String username;
     private String pcName;
-    private String action; // CONNECT, DISCONNECT
+    private String action;
     private LocalDateTime timestamp;
     private String clientIp;
+
+    @ManyToOne
+    @JoinColumn(name = "pc_id")
+    private Pc pc;
 
     // Конструкторы
     public ConnectionLog() {}
@@ -30,14 +34,22 @@ public class ConnectionLog {
     // Геттеры и сеттеры
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+
     public String getPcName() { return pcName; }
     public void setPcName(String pcName) { this.pcName = pcName; }
+
     public String getAction() { return action; }
     public void setAction(String action) { this.action = action; }
+
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+
     public String getClientIp() { return clientIp; }
     public void setClientIp(String clientIp) { this.clientIp = clientIp; }
+
+    public Pc getPc() { return pc; }
+    public void setPc(Pc pc) { this.pc = pc; }
 }

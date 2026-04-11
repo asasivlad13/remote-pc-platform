@@ -106,6 +106,15 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             }
         }
 
+        // Сохраняем размер экрана
+        if (json.has("screenWidth") && json.has("screenHeight")) {
+            int screenWidth = json.get("screenWidth").asInt();
+            int screenHeight = json.get("screenHeight").asInt();
+            pc.setScreenWidth(screenWidth);
+            pc.setScreenHeight(screenHeight);
+            System.out.println("Screen size saved: " + screenWidth + "x" + screenHeight);
+        }
+
         pc.setStatus(PcStatus.ONLINE);
         pc.setLastConnection(LocalDateTime.now());
         pcRepository.save(pc);
@@ -126,7 +135,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             Pc pc = pcRepository.findByMacAddress(mac);
             if (pc != null) {
                 pc.setLastConnection(LocalDateTime.now());
-                pc.setStatus(PcStatus.ONLINE); // Убеждаемся, что статус ONLINE
+                pc.setStatus(PcStatus.ONLINE);
                 pcRepository.save(pc);
                 System.out.println("Heartbeat from: " + mac);
             }

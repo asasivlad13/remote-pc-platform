@@ -88,12 +88,15 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
     public void broadcastFrame(Long pcId, String base64Image) {
         lastFrames.put(pcId, base64Image);
 
+        System.out.println("Broadcasting to " + clientWatching.size() + " clients");
+
         for (Map.Entry<String, Long> entry : clientWatching.entrySet()) {
             if (entry.getValue().equals(pcId)) {
                 WebSocketSession session = sessions.get(entry.getKey());
                 if (session != null && session.isOpen()) {
                     try {
                         session.sendMessage(new TextMessage("{\"type\":\"frame\",\"image\":\"" + base64Image + "\"}"));
+                        System.out.println("Frame sent to client: " + entry.getKey() + " at " + session.getRemoteAddress());
                     } catch (Exception e) {
                         System.err.println("Error sending frame: " + e.getMessage());
                     }
