@@ -51,12 +51,16 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
         JsonNode json = objectMapper.readTree(payload);
         String type = json.get("type").asText();
 
+        if ("ping".equals(type)) {
+            session.sendMessage(new TextMessage(payload.replace("\"ping\"", "\"pong\"")));
+            return;
+        }
+
         if ("watch".equals(type)) {
             Long pcId = json.get("pcId").asLong();
             clientWatching.put(session.getId(), pcId);
             System.out.println("Client " + session.getId() + " is watching PC " + pcId);
 
-            // Логируем подключение (с проверкой на null)
             try {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 String username = (auth != null) ? auth.getName() : "unknown";
@@ -71,18 +75,26 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
                 System.err.println("Error logging connection: " + e.getMessage());
             }
 
-            // Отправляем последний кадр, если есть
             String lastFrame = lastFrames.get(pcId);
             if (lastFrame != null) {
                 session.sendMessage(new TextMessage("{\"type\":\"frame\",\"image\":\"" + lastFrame + "\"}"));
             }
+
         } else if ("stop".equals(type)) {
             clientWatching.remove(session.getId());
             System.out.println("Client " + session.getId() + " stopped watching");
+
         } else if ("command".equals(type)) {
             Long pcId = json.get("pcId").asLong();
             System.out.println("Command from client for PC " + pcId + ": " + json);
             agentWebSocketHandler.sendCommandToAgent(pcId, json);
+
+        } else if ("settings".equals(type)) {
+            Long pcId = json.get("pcId").asLong();
+            System.out.println("Settings from client for PC " + pcId + ": " + json);
+            agentWebSocketHandler.sendCommandToAgent(pcId, json);
+
+            session.sendMessage(new TextMessage("{\"type\":\"settings_applied\"}"));
         }
     }
 
@@ -106,13 +118,6 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
         }
     }
 
-    @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        sessions.remove(session.getId());
-        clientWatching.remove(session.getId());
-        System.out.println("Web client disconnected: " + session.getId());
-    }
-
     public void broadcastBinaryFrame(Long pcId, byte[] imageData) {
         for (Map.Entry<String, Long> entry : clientWatching.entrySet()) {
             if (entry.getValue().equals(pcId)) {
@@ -126,5 +131,12 @@ public class WebSocketClientHandler extends TextWebSocketHandler {
                 }
             }
         }
+    }
+
+    @Override
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
+        sessions.remove(session.getId());
+        clientWatching.remove(session.getId());
+        System.out.println("Web client disconnected: " + session.getId());
     }
 }

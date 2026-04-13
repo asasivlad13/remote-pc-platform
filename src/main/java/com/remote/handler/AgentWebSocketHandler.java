@@ -112,7 +112,7 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         } else {
             if (!pc.getName().equals(pcName)) {
                 pc.setName(pcName);
-                System.out.println("Updating PC name from '" + pc.getName() + "' to '" + pcName + "'");
+                System.out.println("Updating PC name to '" + pcName + "'");
             }
             if (pc.getUser() == null || !pc.getUser().getId().equals(user.getId())) {
                 pc.setUser(user);
@@ -126,14 +126,29 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             System.out.println("Screen size saved: " + pc.getScreenWidth() + "x" + pc.getScreenHeight());
         }
 
+        if (json.has("scaleX") && json.has("scaleY")) {
+            double scaleX = json.get("scaleX").asDouble();
+            double scaleY = json.get("scaleY").asDouble();
+            System.out.println("Scale factors: " + scaleX + " x " + scaleY);
+        }
+
+        if (json.has("webrtcUrl")) {
+            pc.setWebrtcUrl(json.get("webrtcUrl").asText());
+            System.out.println("WebRTC URL saved: " + pc.getWebrtcUrl());
+        }
+
+        if (json.has("streamName")) {
+            pc.setStreamName(json.get("streamName").asText());
+            System.out.println("Stream name saved: " + pc.getStreamName());
+        }
+
         pc.setStatus(PcStatus.ONLINE);
         pc.setLastConnection(LocalDateTime.now());
         pcRepository.save(pc);
 
         agentSessionsByPcId.put(pc.getId(), session);
-        System.out.println("Agent session stored for PC ID: " + pc.getId());
-
         agentSessions.put(mac, session);
+
         session.sendMessage(new TextMessage("{\"status\":\"registered\"}"));
 
         System.out.println("Agent registered: " + pcName + " (" + mac + ") for user: " + username);

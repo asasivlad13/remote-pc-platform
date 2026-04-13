@@ -61,6 +61,8 @@ public class PcController {
         response.put("lastConnection", pc.getLastConnection());
         response.put("screenWidth", pc.getScreenWidth() != null ? pc.getScreenWidth() : 1920);
         response.put("screenHeight", pc.getScreenHeight() != null ? pc.getScreenHeight() : 1080);
+        response.put("webrtcUrl", pc.getWebrtcUrl());
+        response.put("streamName", pc.getStreamName());
 
         return ResponseEntity.ok(response);
     }

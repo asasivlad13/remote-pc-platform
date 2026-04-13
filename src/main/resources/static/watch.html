@@ -5,58 +5,187 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Remote PC - Remote Access</title>
     <link rel="stylesheet" href="/css/style.css">
+
+    <style>
+        .settings-panel {
+            position: fixed;
+            top: 74px;
+            right: 20px;
+            width: 300px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 20px;
+            padding: 18px;
+            z-index: 300;
+            display: none;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        .settings-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            color: white;
+        }
+
+        .settings-label {
+            display: block;
+            font-size: 13px;
+            color: #93c5fd;
+            margin-bottom: 8px;
+        }
+
+        .settings-select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.10);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.18);
+            outline: none;
+            margin-bottom: 14px;
+            font-size: 14px;
+        }
+
+        .settings-select option {
+            background: #0f172a;
+            color: white;
+        }
+
+        .settings-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .video-shell {
+            position: fixed;
+            top: 70px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            background: transparent;
+        }
+
+        .video-shell:fullscreen {
+            top: 0;
+            padding: 0;
+            background: #000;
+        }
+
+        .video-shell:-webkit-full-screen {
+            top: 0;
+            padding: 0;
+            background: #000;
+        }
+
+        .video-frame {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: #000;
+            border-radius: 18px;
+        }
+
+        .video-shell:fullscreen .video-frame,
+        .video-shell:-webkit-full-screen .video-frame {
+            border-radius: 0;
+        }
+
+        #remoteVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+            display: block;
+        }
+
+        .metric-good {
+            color: #34d399;
+        }
+
+        .metric-warn {
+            color: #fbbf24;
+        }
+
+        .metric-bad {
+            color: #ef4444;
+        }
+    </style>
 </head>
 <body style="background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); overflow: hidden;">
+
 <div class="top-bar" style="position:fixed;top:0;left:0;right:0;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;z-index:100;">
     <div style="display:flex;align-items:center;gap:12px;">
         <div style="width:40px;height:40px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:12px;display:flex;align-items:center;justify-content:center;">💻</div>
-        <div><div style="font-weight:600;">Remote Access</div><div style="font-size:12px;color:#93c5fd;" id="pcNameDisplay">Connecting...</div></div>
+        <div>
+            <div style="font-weight:600;">Remote Access</div>
+            <div style="font-size:12px;color:#93c5fd;" id="pcNameDisplay">Connecting...</div>
+        </div>
     </div>
-    <div style="display:flex;gap:10px;">
-        <div style="color:#93c5fd;font-size:13px;display:none;gap:16px;" id="metrics"><span>📊 FPS: <span id="fps" style="color:#34d399;">0</span></span><span>⏱️ Latency: <span id="latency" style="color:#fbbf24;">0</span> ms</span></div>
-        <button id="controlModeBtn" class="btn-glass" style="background:rgba(16,185,129,0.2);border-color:rgba(16,185,129,0.5);">🎮 Control</button>
+
+    <div style="display:flex;align-items:center;gap:12px;">
+        <div id="metrics" style="color:#93c5fd;font-size:13px;display:flex;gap:16px;">
+            <span>🎥 Video: <span id="videoState" class="metric-warn">connecting</span></span>
+            <span>📶 Ping: <span id="pingValue">-</span> ms</span>
+            <span>🎞 FPS: <span id="fpsValue">-</span></span>
+            <span>🔌 WS: <span id="wsState" class="metric-warn">connecting</span></span>
+        </div>
+
         <button id="settingsBtn" class="btn-glass">⚙️</button>
+        <button id="controlModeBtn" class="btn-glass" style="background:rgba(16,185,129,0.2);border-color:rgba(16,185,129,0.5);">🎮 Control</button>
         <button id="fullscreenBtn" class="btn-glass">🖥️</button>
         <button id="disconnectBtn" class="btn-glass" style="background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.5);">⏻</button>
     </div>
 </div>
 
-<div id="settingsPanel" class="settings-panel" style="position:fixed;top:70px;right:20px;width:280px;padding:20px;z-index:200;display:none;">
-    <h3 style="margin-bottom:16px;">⚙️ Video Settings</h3>
-    <div style="margin-bottom:16px;">
-        <label style="color:#93c5fd;font-size:13px;">Resolution</label>
-        <select id="resolutionSelect" class="settings-select" style="width:100%;margin-top:6px;">
-            <option value="360">360p (640x360)</option>
-            <option value="480">480p (854x480)</option>
-            <option value="720" selected>720p (1280x720)</option>
-            <option value="1080">1080p (1920x1080)</option>
-            <option value="1440">1440p (2560x1440)</option>
-            <option value="2160">4K (3840x2160)</option>
-        </select>
+<div id="settingsPanel" class="settings-panel">
+    <div class="settings-title">⚙️ Stream Settings</div>
+
+    <label class="settings-label" for="resolutionSelect">Resolution</label>
+    <select id="resolutionSelect" class="settings-select">
+        <option value="640x480">480p</option>
+        <option value="1280x720" selected>720p</option>
+        <option value="1920x1080">1080p</option>
+        <option value="2560x1440">1440p</option>
+        <option value="3840x2160">4K</option>
+    </select>
+
+    <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.4;">
+        Select a quality preset and apply it.
+        Ping and FPS update automatically.
     </div>
-    <div style="margin-bottom:20px;">
-        <label style="color:#93c5fd;font-size:13px;">Frame Rate</label>
-        <select id="fpsSelect" class="settings-select" style="width:100%;margin-top:6px;">
-            <option value="15">15 FPS</option>
-            <option value="24">24 FPS</option>
-            <option value="30" selected>30 FPS</option>
-            <option value="60">60 FPS</option>
-        </select>
+
+    <div class="settings-actions">
+        <button id="applySettingsBtn" class="btn-primary" style="flex:1;">Apply</button>
+        <button id="closeSettingsBtn" class="btn-glass" style="flex:1;">Close</button>
     </div>
-    <button id="applySettingsBtn" class="btn-primary" style="width:100%;justify-content:center;">Apply</button>
 </div>
 
-<div style="position:fixed;top:70px;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;">
-    <canvas id="videoCanvas" style="max-width:100%;max-height:calc(100vh - 80px);object-fit:contain;border-radius:16px;"></canvas>
+<div id="videoShell" class="video-shell">
+    <div id="videoFrame" class="video-frame">
+        <video id="remoteVideo" autoplay playsinline muted></video>
+    </div>
 </div>
 
 <div id="loadingOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:50;">
-    <div style="text-align:center;"><div class="loading-spinner" style="margin:0 auto;"></div><p style="margin-top:20px;">Connecting...</p></div>
+    <div style="text-align:center;">
+        <div class="loading-spinner" style="margin:0 auto;"></div>
+        <p style="margin-top:20px;">Connecting...</p>
+    </div>
 </div>
 
-<div id="statusBadge" style="position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:12px;color:#34d399;">🟢 Connected</div>
+<div id="statusBadge" style="position:fixed;bottom:16px;right:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:12px;color:#34d399;z-index:120;">🟢 Connected</div>
 
-<div id="modeIndicator" style="position:fixed;bottom:16px;left:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:11px;">
+<div id="modeIndicator" style="position:fixed;bottom:16px;left:16px;background:rgba(0,0,0,0.6);padding:6px 14px;border-radius:20px;font-size:11px;z-index:120;">
     🎮 Control Mode Active
 </div>
 
@@ -69,153 +198,501 @@
     const token = localStorage.getItem('token');
     if (!token) window.location.href = '/login.html';
 
-    const canvas = document.getElementById('videoCanvas');
-    const ctx = canvas.getContext('2d');
+    const video = document.getElementById('remoteVideo');
+    const videoShell = document.getElementById('videoShell');
+    const settingsPanel = document.getElementById('settingsPanel');
 
-    let ws, frameCount = 0, lastTime = Date.now(), lastFrameTime = Date.now(), lastFrameReceived = 0, currentResolution = '720', currentFps = 30, frameInterval = 1000/30;
+    let ws = null;
     let controlMode = true;
+
     let remoteScreenWidth = 1920;
     let remoteScreenHeight = 1080;
 
-    async function getRemoteScreenSize() {
-        try {
-            const response = await fetch(`/pcs/${pcId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const pc = await response.json();
-            if (pc.screenWidth && pc.screenHeight) {
-                remoteScreenWidth = pc.screenWidth;
-                remoteScreenHeight = pc.screenHeight;
-                console.log('Remote screen size:', remoteScreenWidth, 'x', remoteScreenHeight);
-            }
-        } catch(e) {
-            console.error('Failed to get remote screen size', e);
-        }
-    }
+    let webrtcHost = null;
+    let streamName = null;
+
+    let pingInterval = null;
+    let fpsCounterStarted = false;
+    let pendingResolution = "1280x720";
+
+    let pc = null;
+    let wsSignal = null;
+    let signallingPeerId = null;
+    let targetProducerPeerId = null;
+    let currentSessionId = null;
+    let offerReceived = false;
+
+    let listRetryTimer = null;
+    let sessionRetryTimer = null;
+    let sessionStartSent = false;
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname;
     const wsPort = 8080;
     const WS_URL = `${wsProtocol}//${wsHost}:${wsPort}/ws/client`;
-    console.log('WebSocket URL:', WS_URL);
 
-    function getSize(r) {
-        const sizes = {
-            '360': { w: 640, h: 360 },
-            '480': { w: 854, h: 480 },
-            '720': { w: 1280, h: 720 },
-            '1080': { w: 1920, h: 1080 },
-            '1440': { w: 2560, h: 1440 },
-            '2160': { w: 3840, h: 2160 }
-        };
-        return sizes[r] || sizes['720'];
-    }
-
-    function applySettings() {
-        currentResolution = document.getElementById('resolutionSelect').value;
-        currentFps = parseInt(document.getElementById('fpsSelect').value);
-        frameInterval = 1000 / currentFps;
-        const s = getSize(currentResolution);
-        canvas.width = s.w;
-        canvas.height = s.h;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'settings', pcId: parseInt(pcId), resolution: currentResolution, fps: currentFps }));
+    function pretty(obj) {
+        try {
+            return JSON.stringify(obj, null, 2);
+        } catch (e) {
+            return String(obj);
         }
     }
 
-    function connect() {
-        document.getElementById('loadingOverlay').style.display = 'flex';
-        ws = new WebSocket(WS_URL);
+    function showLoadingError(message) {
+        document.getElementById('loadingOverlay').innerHTML =
+            '<div style="text-align:center;">' +
+            '<p style="color:#f87171;font-size:18px;">Connection failed</p>' +
+            '<p style="margin-top:10px;">' + message + '</p>' +
+            '</div>';
+    }
 
-        // Настройка для приёма бинарных данных
-        ws.binaryType = 'arraybuffer';
+    async function getPcInfo() {
+        const response = await fetch(`/pcs/${pcId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to load PC info");
+        }
+
+        const pcInfo = await response.json();
+
+        if (pcInfo.screenWidth && pcInfo.screenHeight) {
+            remoteScreenWidth = pcInfo.screenWidth;
+            remoteScreenHeight = pcInfo.screenHeight;
+        }
+
+        if (!pcInfo.webrtcUrl || !pcInfo.streamName) {
+            throw new Error("PC does not provide WebRTC stream info");
+        }
+
+        webrtcHost = pcInfo.webrtcUrl;
+        streamName = pcInfo.streamName;
+
+        console.log("Remote screen:", remoteScreenWidth, "x", remoteScreenHeight);
+        console.log("WebRTC host:", webrtcHost);
+        console.log("Stream name:", streamName);
+    }
+
+    function getSignallingUrl() {
+        const url = new URL(webrtcHost);
+        const proto = url.protocol === "https:" ? "wss:" : "ws:";
+        return `${proto}//${url.hostname}:8443`;
+    }
+
+    function startProducerDiscoveryLoop() {
+        stopProducerDiscoveryLoop();
+
+        listRetryTimer = setInterval(() => {
+            if (!wsSignal || wsSignal.readyState !== WebSocket.OPEN) return;
+            if (targetProducerPeerId) return;
+
+            console.log("Retrying producer list...");
+            wsSignal.send(JSON.stringify({ type: "list" }));
+        }, 1500);
+    }
+
+    function stopProducerDiscoveryLoop() {
+        if (listRetryTimer) {
+            clearInterval(listRetryTimer);
+            listRetryTimer = null;
+        }
+    }
+
+    function startSessionRetryLoop() {
+        stopSessionRetryLoop();
+
+        sessionRetryTimer = setInterval(() => {
+            if (!wsSignal || wsSignal.readyState !== WebSocket.OPEN) return;
+            if (!targetProducerPeerId) return;
+            if (currentSessionId) return;
+            if (offerReceived) return;
+
+            const startMsg = {
+                type: "startSession",
+                peerId: targetProducerPeerId
+            };
+
+            console.log("Retrying startSession:", pretty(startMsg));
+            wsSignal.send(JSON.stringify(startMsg));
+            sessionStartSent = true;
+        }, 2000);
+    }
+
+    function stopSessionRetryLoop() {
+        if (sessionRetryTimer) {
+            clearInterval(sessionRetryTimer);
+            sessionRetryTimer = null;
+        }
+    }
+
+    async function handleSignalMessage(data) {
+        console.log("Signal FULL:", pretty(data));
+
+        if (data.type === "welcome" && data.peerId) {
+            signallingPeerId = data.peerId;
+            console.log("Our signalling peerId:", signallingPeerId);
+
+            wsSignal.send(JSON.stringify({
+                type: "setPeerStatus",
+                roles: ["listener", "consumer"],
+                meta: {
+                    name: "watch-client",
+                    pcId: String(pcId)
+                }
+            }));
+
+            wsSignal.send(JSON.stringify({ type: "list" }));
+            startProducerDiscoveryLoop();
+            return;
+        }
+
+        if (data.type === "list" && Array.isArray(data.producers)) {
+            console.log("Producer list:", pretty(data.producers));
+
+            const producer = data.producers.find(p => {
+                const meta = p.meta || {};
+                return meta.name === streamName || p.id === streamName || p.peerId === streamName;
+            });
+
+            if (producer) {
+                targetProducerPeerId = producer.peerId || producer.id;
+                console.log("Found producer from list:", pretty(producer));
+
+                stopProducerDiscoveryLoop();
+
+                const startMsg = {
+                    type: "startSession",
+                    peerId: targetProducerPeerId
+                };
+
+                console.log("Sending startSession:", pretty(startMsg));
+                wsSignal.send(JSON.stringify(startMsg));
+                sessionStartSent = true;
+
+                startSessionRetryLoop();
+            } else {
+                console.warn("Producer not found for stream:", streamName);
+            }
+            return;
+        }
+
+        if (data.type === "sessionStarted") {
+            currentSessionId = data.sessionId;
+            console.log("Session started:", currentSessionId);
+            stopSessionRetryLoop();
+            return;
+        }
+
+        if (data.type === "peer") {
+            if (data.sessionId) {
+                currentSessionId = data.sessionId;
+            }
+
+            if (data.sdp && data.sdp.type === "offer") {
+                offerReceived = true;
+                stopSessionRetryLoop();
+                console.log("Received offer");
+
+                await pc.setRemoteDescription(new RTCSessionDescription({
+                    type: "offer",
+                    sdp: data.sdp.sdp
+                }));
+
+                console.log("Remote description set");
+
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+
+                console.log("Local description set, sending answer");
+
+                const answerMsg = {
+                    type: "peer",
+                    sessionId: currentSessionId,
+                    sdp: {
+                        type: "answer",
+                        sdp: answer.sdp
+                    }
+                };
+
+                console.log("Sending answer:", pretty(answerMsg));
+                wsSignal.send(JSON.stringify(answerMsg));
+                return;
+            }
+
+            if (data.ice && typeof data.ice.sdpMLineIndex !== "undefined") {
+                const candidateValue = data.ice.candidate;
+
+                if (candidateValue && candidateValue.trim() !== "") {
+                    try {
+                        await pc.addIceCandidate(new RTCIceCandidate({
+                            candidate: data.ice.candidate,
+                            sdpMLineIndex: data.ice.sdpMLineIndex
+                        }));
+                        console.log("Remote ICE candidate added");
+                    } catch (e) {
+                        console.warn("ICE add failed:", e);
+                    }
+                } else {
+                    console.log("End-of-candidates received");
+                }
+                return;
+            }
+        }
+
+        if (data.type === "error") {
+            console.error("Signalling server error:", data);
+        }
+    }
+
+    function connectVideo() {
+        try {
+            console.log("Connecting to GStreamer WebRTC...");
+
+            const signallingUrl = getSignallingUrl();
+            console.log("Signalling URL:", signallingUrl);
+
+            pc = new RTCPeerConnection({
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" }
+                ]
+            });
+
+            pc.ontrack = (event) => {
+                console.log("Received track:", event);
+                if (event.streams && event.streams.length > 0) {
+                    video.srcObject = event.streams[0];
+                } else {
+                    const stream = new MediaStream([event.track]);
+                    video.srcObject = stream;
+                }
+            };
+
+            pc.onicecandidate = (event) => {
+                if (!wsSignal || wsSignal.readyState !== WebSocket.OPEN) return;
+                if (!currentSessionId) return;
+
+                if (event.candidate) {
+                    const iceMsg = {
+                        type: "peer",
+                        sessionId: currentSessionId,
+                        ice: {
+                            candidate: event.candidate.candidate,
+                            sdpMLineIndex: event.candidate.sdpMLineIndex
+                        }
+                    };
+
+                    console.log("Sending local ICE:", pretty(iceMsg));
+                    wsSignal.send(JSON.stringify(iceMsg));
+                } else {
+                    const endMsg = {
+                        type: "peer",
+                        sessionId: currentSessionId,
+                        ice: {
+                            candidate: "",
+                            sdpMLineIndex: 0
+                        }
+                    };
+
+                    console.log("Sending end-of-candidates:", pretty(endMsg));
+                    wsSignal.send(JSON.stringify(endMsg));
+                }
+            };
+
+            pc.onconnectionstatechange = () => {
+                console.log("PC connection state:", pc.connectionState);
+
+                if (pc.connectionState === "connected") {
+                    document.getElementById('videoState').innerText = 'connected';
+                    document.getElementById('videoState').className = 'metric-good';
+                } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+                    document.getElementById('videoState').innerText = 'error';
+                    document.getElementById('videoState').className = 'metric-bad';
+                }
+            };
+
+            pc.oniceconnectionstatechange = () => {
+                console.log("ICE connection state:", pc.iceConnectionState);
+            };
+
+            pc.onicegatheringstatechange = () => {
+                console.log("ICE gathering state:", pc.iceGatheringState);
+            };
+
+            pc.onsignalingstatechange = () => {
+                console.log("PC signalling state:", pc.signalingState);
+            };
+
+            wsSignal = new WebSocket(signallingUrl);
+
+            wsSignal.onopen = () => {
+                console.log("Signalling connected");
+                document.getElementById('videoState').innerText = 'connecting';
+                document.getElementById('videoState').className = 'metric-warn';
+            };
+
+            wsSignal.onmessage = async (msg) => {
+                try {
+                    const data = JSON.parse(msg.data);
+                    await handleSignalMessage(data);
+                } catch (e) {
+                    console.error("Signalling parse/handle error:", e, msg.data);
+                }
+            };
+
+            wsSignal.onerror = (e) => {
+                console.error("Signalling error:", e);
+            };
+
+            wsSignal.onclose = () => {
+                console.warn("Signalling closed");
+            };
+
+        } catch (e) {
+            console.error("WebRTC error:", e);
+            document.getElementById('videoState').innerText = 'error';
+            document.getElementById('videoState').className = 'metric-bad';
+            showLoadingError('Video connection failed: ' + e.message);
+        }
+    }
+
+    function disconnectVideo() {
+        try {
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            if (wsSignal) {
+                wsSignal.close();
+                wsSignal = null;
+            }
+
+            stopProducerDiscoveryLoop();
+            stopSessionRetryLoop();
+
+            currentSessionId = null;
+            targetProducerPeerId = null;
+            signallingPeerId = null;
+            offerReceived = false;
+            sessionStartSent = false;
+        } catch (e) {
+            console.error("WebRTC disconnect error:", e);
+        }
+    }
+
+    function connectWs() {
+        ws = new WebSocket(WS_URL);
 
         ws.onopen = () => {
             console.log('WebSocket connected to', WS_URL);
-            document.getElementById('loadingOverlay').style.display = 'none';
-            document.getElementById('metrics').style.display = 'flex';
+            document.getElementById('wsState').innerText = 'connected';
+            document.getElementById('wsState').className = 'metric-good';
+            document.getElementById('statusBadge').innerHTML = '🟢 Connected';
+
             ws.send(JSON.stringify({ type: 'watch', pcId: parseInt(pcId) }));
-            console.log('Watch sent for PC ID:', pcId);
-            setTimeout(applySettings, 500);
+            startPing();
         };
 
         ws.onmessage = (event) => {
-            // Обработка бинарных данных (WebP/JPEG кадры)
-            if (event.data instanceof ArrayBuffer) {
-                const bytes = new Uint8Array(event.data);
-                // Определяем тип изображения по первым байтам
-                let mimeType = 'image/jpeg';
-                if (bytes.length > 4 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
-                    mimeType = 'image/webp';
+            if (typeof event.data !== 'string') return;
+
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === "pong" && typeof data.ts === "number") {
+                    const ping = Date.now() - data.ts;
+                    document.getElementById("pingValue").innerText = ping;
+                    return;
                 }
 
-                const blob = new Blob([bytes], { type: mimeType });
-                const url = URL.createObjectURL(blob);
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    URL.revokeObjectURL(url);
-
-                    frameCount++;
-                    const now = Date.now();
-                    if (now - lastTime >= 1000) {
-                        document.getElementById('fps').innerText = frameCount;
-                        frameCount = 0;
-                        lastTime = now;
-                    }
-                    document.getElementById('latency').innerText = now - lastFrameTime;
-                    lastFrameTime = now;
-                };
-                img.onerror = () => {
-                    console.error('Failed to decode image');
-                    URL.revokeObjectURL(url);
-                };
-                img.src = url;
-            }
-            // Обработка JSON сообщений (команды, статусы, настройки)
-            else if (typeof event.data === 'string') {
-                try {
-                    const data = JSON.parse(event.data);
-
-                    if (data.type === 'frame') {
-                        // Совместимость со старым форматом (Base64)
-                        const img = new Image();
-                        img.onload = () => {
-                            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            frameCount++;
-                            const now = Date.now();
-                            if (now - lastTime >= 1000) {
-                                document.getElementById('fps').innerText = frameCount;
-                                frameCount = 0;
-                                lastTime = now;
-                            }
-                            document.getElementById('latency').innerText = now - lastFrameTime;
-                            lastFrameTime = now;
-                        };
-                        img.src = `data:image/jpeg;base64,${data.image}`;
-                    }
-                } catch(e) {
-                    console.log('Non-JSON message:', event.data);
+                if (data.type === "settings_applied") {
+                    console.log("Settings applied:", data);
+                    settingsPanel.style.display = 'none';
+                    return;
                 }
+
+                console.log("WS message:", data);
+            } catch (e) {
+                console.log("Non-JSON message:", event.data);
             }
         };
 
         ws.onclose = () => {
-            console.log('WebSocket closed');
-            document.getElementById('statusBadge').innerHTML = '🟡 Reconnecting...';
-            setTimeout(connect, 3000);
+            document.getElementById('wsState').innerText = 'closed';
+            document.getElementById('wsState').className = 'metric-warn';
+            document.getElementById('statusBadge').innerHTML = '🟡 Disconnected';
         };
 
-        ws.onerror = (err) => {
-            console.error('WebSocket error:', err);
+        ws.onerror = () => {
+            document.getElementById('wsState').innerText = 'error';
+            document.getElementById('wsState').className = 'metric-bad';
             document.getElementById('statusBadge').innerHTML = '🔴 Error';
         };
     }
 
-    let lastMouseMove = 0, lastClick = 0, lastWheel = 0;
+    function startPing() {
+        if (pingInterval) clearInterval(pingInterval);
+
+        pingInterval = setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: "ping",
+                    ts: Date.now()
+                }));
+            }
+        }, 2000);
+    }
+
+    function startFpsCounter() {
+        if (fpsCounterStarted) return;
+        fpsCounterStarted = true;
+
+        let frameCount = 0;
+        let lastFpsTime = performance.now();
+
+        function onFrame() {
+            frameCount++;
+
+            const now = performance.now();
+            if (now - lastFpsTime >= 1000) {
+                document.getElementById("fpsValue").innerText = frameCount;
+                frameCount = 0;
+                lastFpsTime = now;
+            }
+
+            if (video.requestVideoFrameCallback) {
+                video.requestVideoFrameCallback(onFrame);
+            } else {
+                requestAnimationFrame(onFrame);
+            }
+        }
+
+        if (video.requestVideoFrameCallback) {
+            video.requestVideoFrameCallback(onFrame);
+        } else {
+            requestAnimationFrame(onFrame);
+        }
+    }
+
     function sendCommand(action, data) {
         if (ws && ws.readyState === WebSocket.OPEN && controlMode) {
-            ws.send(JSON.stringify({ type: 'command', pcId: parseInt(pcId), action: action, ...data }));
+            ws.send(JSON.stringify({
+                type: 'command',
+                pcId: parseInt(pcId),
+                action: action,
+                ...data
+            }));
+        }
+    }
+
+    function sendSettings(resolution) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: "settings",
+                pcId: parseInt(pcId),
+                resolution: resolution
+            }));
         }
     }
 
@@ -223,6 +700,7 @@
         controlMode = !controlMode;
         const btn = document.getElementById('controlModeBtn');
         const indicator = document.getElementById('modeIndicator');
+
         if (controlMode) {
             btn.innerHTML = '🎮 Control';
             btn.style.background = 'rgba(16,185,129,0.2)';
@@ -233,131 +711,209 @@
             btn.innerHTML = '👁️ View';
             btn.style.background = 'rgba(245,158,11,0.2)';
             btn.style.borderColor = 'rgba(245,158,11,0.5)';
-            indicator.innerHTML = '👁️ View Mode - Keyboard & Mouse disabled (use Esc to exit fullscreen)';
+            indicator.innerHTML = '👁️ View Mode - Keyboard & Mouse disabled';
             indicator.style.color = '#fbbf24';
         }
     }
 
-    // Mouse move with scaling
-    canvas.addEventListener('mousemove', (e) => {
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            videoShell.requestFullscreen().catch(err => console.error(err));
+        } else {
+            document.exitFullscreen().catch(err => console.error(err));
+        }
+    }
+
+    function getRenderedVideoRect() {
+        const outer = video.getBoundingClientRect();
+
+        const vw = video.videoWidth || remoteScreenWidth;
+        const vh = video.videoHeight || remoteScreenHeight;
+
+        const videoAspect = vw / vh;
+        const boxAspect = outer.width / outer.height;
+
+        let width, height, left, top;
+
+        if (boxAspect > videoAspect) {
+            height = outer.height;
+            width = height * videoAspect;
+            left = outer.left + (outer.width - width) / 2;
+            top = outer.top;
+        } else {
+            width = outer.width;
+            height = width / videoAspect;
+            left = outer.left;
+            top = outer.top + (outer.height - height) / 2;
+        }
+
+        return { left, top, width, height };
+    }
+
+    function translateMouseCoords(e) {
+        const rect = getRenderedVideoRect();
+
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+            return null;
+        }
+
+        const remoteX = Math.round((x / rect.width) * remoteScreenWidth);
+        const remoteY = Math.round((y / rect.height) * remoteScreenHeight);
+
+        return {
+            x: Math.max(0, Math.min(remoteX, remoteScreenWidth - 1)),
+            y: Math.max(0, Math.min(remoteY, remoteScreenHeight - 1))
+        };
+    }
+
+    let lastMouseMove = 0;
+    let lastClick = 0;
+    let lastWheel = 0;
+
+    video.addEventListener('mousemove', (e) => {
         if (!controlMode) return;
+
         const now = Date.now();
         if (now - lastMouseMove < 16) return;
         lastMouseMove = now;
 
-        const rect = canvas.getBoundingClientRect();
-        const canvasX = (e.clientX - rect.left) * (canvas.width / rect.width);
-        const canvasY = (e.clientY - rect.top) * (canvas.height / rect.height);
+        const point = translateMouseCoords(e);
+        if (!point) return;
 
-        const remoteX = Math.round(canvasX / canvas.width * remoteScreenWidth);
-        const remoteY = Math.round(canvasY / canvas.height * remoteScreenHeight);
-
-        sendCommand('MOUSE_MOVE', { x: Math.max(0, Math.min(remoteX, remoteScreenWidth)), y: Math.max(0, Math.min(remoteY, remoteScreenHeight)) });
+        sendCommand('MOUSE_MOVE', point);
     });
 
-    canvas.addEventListener('click', (e) => {
+    video.addEventListener('click', (e) => {
         if (!controlMode) return;
+
         const now = Date.now();
         if (now - lastClick < 200) return;
         lastClick = now;
+
+        const point = translateMouseCoords(e);
+        if (point) sendCommand('MOUSE_MOVE', point);
+
         sendCommand('MOUSE_CLICK', { button: 1 });
     });
 
-    canvas.addEventListener('wheel', (e) => {
+    video.addEventListener('contextmenu', (e) => {
         if (!controlMode) return;
+        e.preventDefault();
+
+        const point = translateMouseCoords(e);
+        if (point) sendCommand('MOUSE_MOVE', point);
+
+        sendCommand('MOUSE_CLICK', { button: 3 });
+    });
+
+    video.addEventListener('wheel', (e) => {
+        if (!controlMode) return;
+
         const now = Date.now();
         if (now - lastWheel < 50) return;
         lastWheel = now;
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -1 : 1;
-        sendCommand('MOUSE_WHEEL', { delta: delta });
-    });
 
-    // Keyboard events
+        e.preventDefault();
+
+        const delta = e.deltaY > 0 ? 1 : -1;
+        sendCommand('MOUSE_WHEEL', { delta });
+    }, { passive: false });
+
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && document.fullscreenElement) {
             document.exitFullscreen();
             e.preventDefault();
             return;
         }
+
         if (!controlMode) return;
+
         e.preventDefault();
         e.stopPropagation();
 
-        if (e.key === 'F4' && e.altKey) return;
-        if (e.key === 'Delete' && e.ctrlKey && e.altKey) return;
-
-        let keyCode = e.keyCode;
-        const specialKeys = {
-            'Delete': 46, 'Insert': 45, 'Home': 36, 'End': 35,
-            'PageUp': 33, 'PageDown': 34, 'ArrowUp': 38, 'ArrowDown': 40,
-            'ArrowLeft': 37, 'ArrowRight': 39, 'F1': 112, 'F2': 113,
-            'F3': 114, 'F4': 115, 'F5': 116, 'F6': 117, 'F7': 118,
-            'F8': 119, 'F9': 120, 'F10': 121, 'F11': 122, 'F12': 123
-        };
-        if (specialKeys[e.key]) keyCode = specialKeys[e.key];
-
-        const ctrl = e.ctrlKey;
-        const alt = e.altKey;
-        const shift = e.shiftKey;
-        const meta = e.metaKey;
-
-        if (meta) {
-            sendCommand('KEY_PRESS', { keyCode: 91 });
-            return;
-        }
-
-        sendCommand('KEY_PRESS', { keyCode: keyCode, ctrl: ctrl, alt: alt, shift: shift });
+        sendCommand('KEY_PRESS', {
+            keyCode: e.keyCode,
+            ctrl: e.ctrlKey,
+            alt: e.altKey,
+            shift: e.shiftKey
+        });
     });
 
     document.addEventListener('keyup', (e) => {
         if (!controlMode) return;
+
         e.preventDefault();
         e.stopPropagation();
 
-        let keyCode = e.keyCode;
-        const specialKeys = {
-            'Delete': 46, 'Insert': 45, 'Home': 36, 'End': 35,
-            'PageUp': 33, 'PageDown': 34, 'ArrowUp': 38, 'ArrowDown': 40,
-            'ArrowLeft': 37, 'ArrowRight': 39
-        };
-        if (specialKeys[e.key]) keyCode = specialKeys[e.key];
-
-        sendCommand('KEY_RELEASE', { keyCode: keyCode });
+        sendCommand('KEY_RELEASE', { keyCode: e.keyCode });
     });
 
-    canvas.addEventListener('contextmenu', (e) => {
-        if (!controlMode) return;
-        e.preventDefault();
-        sendCommand('MOUSE_CLICK', { button: 3 });
-        return false;
+    document.getElementById('resolutionSelect').addEventListener('change', (e) => {
+        pendingResolution = e.target.value;
     });
 
-    // UI Controls
-    document.getElementById('controlModeBtn').onclick = toggleControlMode;
+    document.getElementById('applySettingsBtn').addEventListener('click', () => {
+        sendSettings(pendingResolution);
+    });
+
     document.getElementById('settingsBtn').onclick = () => {
-        const p = document.getElementById('settingsPanel');
-        p.style.display = p.style.display === 'none' ? 'block' : 'none';
+        settingsPanel.style.display = settingsPanel.style.display === 'block' ? 'none' : 'block';
     };
-    document.getElementById('applySettingsBtn').onclick = () => {
-        applySettings();
-        document.getElementById('settingsPanel').style.display = 'none';
+
+    document.getElementById('closeSettingsBtn').onclick = () => {
+        settingsPanel.style.display = 'none';
     };
-    document.getElementById('fullscreenBtn').onclick = () => {
-        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-        else document.exitFullscreen();
-    };
+
+    document.getElementById('controlModeBtn').onclick = toggleControlMode;
+    document.getElementById('fullscreenBtn').onclick = toggleFullscreen;
+
     document.getElementById('disconnectBtn').onclick = () => {
+        disconnectVideo();
         if (ws) ws.close();
         window.location.href = '/pcs.html';
     };
 
-    // Initialize
-    getRemoteScreenSize();
-    const s = getSize('720');
-    canvas.width = s.w;
-    canvas.height = s.h;
-    connect();
+    video.addEventListener('loadedmetadata', () => {
+        console.log("Video metadata loaded:", video.videoWidth, video.videoHeight);
+        document.getElementById('videoState').innerText = 'playing';
+        document.getElementById('videoState').className = 'metric-good';
+        document.getElementById('loadingOverlay').style.display = 'none';
+        startFpsCounter();
+    });
+
+    video.addEventListener('playing', () => {
+        console.log("Video playing");
+        document.getElementById('videoState').innerText = 'playing';
+        document.getElementById('videoState').className = 'metric-good';
+        document.getElementById('loadingOverlay').style.display = 'none';
+    });
+
+    video.addEventListener('error', () => {
+        document.getElementById('videoState').innerText = 'error';
+        document.getElementById('videoState').className = 'metric-bad';
+        showLoadingError('HTML video element failed to load stream');
+    });
+
+    window.addEventListener('beforeunload', () => {
+        disconnectVideo();
+        if (ws) ws.close();
+    });
+
+    async function init() {
+        try {
+            await getPcInfo();
+            connectWs();
+            connectVideo();
+        } catch (e) {
+            console.error(e);
+            showLoadingError(e.message);
+        }
+    }
+
+    init();
 </script>
 </body>
 </html>

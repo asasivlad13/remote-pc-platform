@@ -22,6 +22,9 @@ public class Pc {
     private Integer screenWidth;
     private Integer screenHeight;
 
+    private String webrtcUrl;
+    private String streamName;
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
@@ -29,7 +32,6 @@ public class Pc {
     @OneToMany(mappedBy = "pc", cascade = CascadeType.ALL)
     private List<ConnectionLog> connectionLogs;
 
-    // Конструкторы
     public Pc() {}
 
     public Pc(String name, String macAddress, User user) {
@@ -39,7 +41,6 @@ public class Pc {
         this.status = PcStatus.OFFLINE;
     }
 
-    // Геттеры и сеттеры
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -60,6 +61,12 @@ public class Pc {
 
     public Integer getScreenHeight() { return screenHeight; }
     public void setScreenHeight(Integer screenHeight) { this.screenHeight = screenHeight; }
+
+    public String getWebrtcUrl() { return webrtcUrl; }
+    public void setWebrtcUrl(String webrtcUrl) { this.webrtcUrl = webrtcUrl; }
+
+    public String getStreamName() { return streamName; }
+    public void setStreamName(String streamName) { this.streamName = streamName; }
 
     public User getUser() { return user; }
     public void setUser(User user) { this.user = user; }
