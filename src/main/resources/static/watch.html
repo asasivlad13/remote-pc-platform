@@ -189,7 +189,58 @@
     🎮 Control Mode Active
 </div>
 
+<div id="dropOverlay" style="
+    position:fixed;
+    inset:0;
+    background:rgba(15,23,42,0.88);
+    border:3px dashed rgba(59,130,246,0.9);
+    z-index:500;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:white;
+">
+    <div>
+        <div style="font-size:64px;margin-bottom:16px;">📁</div>
+        <div style="font-size:26px;font-weight:700;">Отпустите файл</div>
+        <div style="font-size:15px;color:#93c5fd;margin-top:8px;">
+            Файл будет передан на удалённый ПК
+        </div>
+    </div>
+</div>
+
+<div id="fileProgress" style="
+    position:fixed;
+    bottom:58px;
+    right:16px;
+    width:320px;
+    background:rgba(15,23,42,0.95);
+    border:1px solid rgba(59,130,246,0.4);
+    border-radius:16px;
+    padding:14px;
+    z-index:501;
+    display:none;
+    color:white;
+">
+    <div id="fileProgressTitle" style="font-size:14px;font-weight:700;margin-bottom:8px;">Передача файла...</div>
+    <div style="height:8px;background:rgba(255,255,255,0.12);border-radius:999px;overflow:hidden;">
+        <div id="fileProgressBar" style="height:100%;width:0%;background:#3b82f6;"></div>
+    </div>
+    <div id="fileProgressText" style="font-size:12px;color:#93c5fd;margin-top:8px;">0%</div>
+
+    <div id="fileControls" style="margin-top:10px; display:flex; gap:8px;">
+        <button id="pauseBtn" class="btn-glass">⏸ Пауза</button>
+        <button id="resumeBtn" class="btn-glass">▶ Продолжить</button>
+        <button id="cancelBtn" class="btn-glass" style="background:rgba(239,68,68,0.2);border-color:rgba(239,68,68,0.5);">
+            ❌ Отменить
+        </button>
+    </div>
+
+</div>
+
 <script>
+    let currentDownloadFileId = null;
     const urlParams = new URLSearchParams(window.location.search);
     const pcId = urlParams.get('pcId');
     const pcName = decodeURIComponent(urlParams.get('pcName') || 'Unknown');
@@ -201,6 +252,7 @@
     const video = document.getElementById('remoteVideo');
     const videoShell = document.getElementById('videoShell');
     const settingsPanel = document.getElementById('settingsPanel');
+    const dropOverlay = document.getElementById('dropOverlay');
 
     let ws = null;
     let controlMode = true;
@@ -212,6 +264,7 @@
     let streamName = null;
 
     let pingInterval = null;
+    let metricsInterval = null;
     let fpsCounterStarted = false;
     let pendingResolution = "1280x720";
 
@@ -225,6 +278,9 @@
     let listRetryTimer = null;
     let sessionRetryTimer = null;
     let sessionStartSent = false;
+
+    const MAX_FILE_SIZE = 500 * 1024 * 1024;
+    const FILE_CHUNK_SIZE = 64 * 1024;
 
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.hostname;
@@ -339,7 +395,10 @@
                 roles: ["listener", "consumer"],
                 meta: {
                     name: "watch-client",
-                    pcId: String(pcId)
+                    pcId: String(pcId),
+                    pcName: pcName,
+                    platform: navigator.platform,
+                    browser: navigator.userAgent
                 }
             }));
 
@@ -437,7 +496,6 @@
                 } else {
                     console.log("End-of-candidates received");
                 }
-                return;
             }
         }
 
@@ -445,7 +503,45 @@
             console.error("Signalling server error:", data);
         }
     }
+    function sendFileControl(action) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (!currentDownloadFileId) return;
 
+        ws.send(JSON.stringify({
+            type: "command",
+            pcId: parseInt(pcId),
+            action: action,
+            fileId: currentDownloadFileId
+        }));
+
+        console.log("Sent:", action, currentDownloadFileId);
+    }
+    document.getElementById('pauseBtn').onclick = () => {
+        sendFileControl("FILE_PAUSE");
+    };
+
+    document.getElementById('resumeBtn').onclick = () => {
+        sendFileControl("FILE_RESUME");
+    };
+
+    document.getElementById('cancelBtn').onclick = () => {
+        sendFileControl("FILE_CANCEL");
+    };
+    document.getElementById('pauseBtn').onclick = () => {
+        sendFileControl("FILE_PAUSE");
+        document.getElementById('fileProgressTitle').innerText += " (Пауза)";
+    };
+
+    document.getElementById('resumeBtn').onclick = () => {
+        sendFileControl("FILE_RESUME");
+    };
+
+    document.getElementById('cancelBtn').onclick = () => {
+        sendFileControl("FILE_CANCEL");
+
+        document.getElementById('fileProgressTitle').innerText = "Отменено";
+        document.getElementById('fileProgressBar').style.background = "#ef4444";
+    };
     function connectVideo() {
         try {
             console.log("Connecting to GStreamer WebRTC...");
@@ -512,17 +608,9 @@
                 }
             };
 
-            pc.oniceconnectionstatechange = () => {
-                console.log("ICE connection state:", pc.iceConnectionState);
-            };
-
-            pc.onicegatheringstatechange = () => {
-                console.log("ICE gathering state:", pc.iceGatheringState);
-            };
-
-            pc.onsignalingstatechange = () => {
-                console.log("PC signalling state:", pc.signalingState);
-            };
+            pc.oniceconnectionstatechange = () => console.log("ICE connection state:", pc.iceConnectionState);
+            pc.onicegatheringstatechange = () => console.log("ICE gathering state:", pc.iceGatheringState);
+            pc.onsignalingstatechange = () => console.log("PC signalling state:", pc.signalingState);
 
             wsSignal = new WebSocket(signallingUrl);
 
@@ -541,13 +629,8 @@
                 }
             };
 
-            wsSignal.onerror = (e) => {
-                console.error("Signalling error:", e);
-            };
-
-            wsSignal.onclose = () => {
-                console.warn("Signalling closed");
-            };
+            wsSignal.onerror = (e) => console.error("Signalling error:", e);
+            wsSignal.onclose = () => console.warn("Signalling closed");
 
         } catch (e) {
             console.error("WebRTC error:", e);
@@ -590,8 +673,18 @@
             document.getElementById('wsState').className = 'metric-good';
             document.getElementById('statusBadge').innerHTML = '🟢 Connected';
 
-            ws.send(JSON.stringify({ type: 'watch', pcId: parseInt(pcId) }));
+            ws.send(JSON.stringify({
+                type: 'watch',
+                pcId: parseInt(pcId),
+                token: token,
+                pcName: pcName,
+                platform: navigator.platform,
+                browser: navigator.userAgent,
+                mode: controlMode ? "Control" : "View"
+            }));
+
             startPing();
+            startMetricsSending();
         };
 
         ws.onmessage = (event) => {
@@ -599,6 +692,23 @@
 
             try {
                 const data = JSON.parse(event.data);
+                if (data.type === "FILE_PROGRESS") {
+                    const percent = data.percent || 0;
+                    const fileName = data.fileName || "file";
+
+                    currentDownloadFileId = data.fileId;
+
+                    document.getElementById('fileProgress').style.display = 'block';
+                    document.getElementById('fileProgressTitle').innerText = 'Загрузка на ПК2: ' + fileName;
+                    document.getElementById('fileProgressBar').style.width = percent + '%';
+                    document.getElementById('fileProgressText').innerText = percent + '%';
+
+                    if (percent >= 100) {
+                        hideFileProgressDelayed();
+                    }
+
+                    return;
+                }
 
                 if (data.type === "pong" && typeof data.ts === "number") {
                     const ping = Date.now() - data.ts;
@@ -644,6 +754,26 @@
         }, 2000);
     }
 
+    function startMetricsSending() {
+        if (metricsInterval) clearInterval(metricsInterval);
+        metricsInterval = setInterval(sendMetrics, 5000);
+    }
+
+    function sendMetrics() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            const fpsText = document.getElementById("fpsValue").innerText;
+            const pingText = document.getElementById("pingValue").innerText;
+
+            ws.send(JSON.stringify({
+                type: "metrics",
+                pcId: parseInt(pcId),
+                fps: fpsText === "-" ? 0 : parseFloat(fpsText),
+                latency: pingText === "-" ? 0 : parseFloat(pingText),
+                mode: controlMode ? "Control" : "View"
+            }));
+        }
+    }
+
     function startFpsCounter() {
         if (fpsCounterStarted) return;
         fpsCounterStarted = true;
@@ -675,8 +805,8 @@
         }
     }
 
-    function sendCommand(action, data) {
-        if (ws && ws.readyState === WebSocket.OPEN && controlMode) {
+    function sendCommand(action, data = {}, allowInViewMode = false) {
+        if (ws && ws.readyState === WebSocket.OPEN && (controlMode || allowInViewMode)) {
             ws.send(JSON.stringify({
                 type: 'command',
                 pcId: parseInt(pcId),
@@ -693,6 +823,83 @@
                 pcId: parseInt(pcId),
                 resolution: resolution
             }));
+        }
+    }
+
+    function generateTransferId() {
+        if (window.crypto && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+
+        return 'transfer-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    }
+
+    function arrayBufferToBase64(buffer) {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+
+        return btoa(binary);
+    }
+
+    function updateFileProgress(fileName, percent) {
+        document.getElementById('fileProgress').style.display = 'block';
+        document.getElementById('fileProgressTitle').innerText = 'Передача: ' + fileName;
+        document.getElementById('fileProgressBar').style.width = percent + '%';
+        document.getElementById('fileProgressText').innerText = percent + '%';
+    }
+
+    function hideFileProgressDelayed() {
+        setTimeout(() => {
+            document.getElementById('fileProgress').style.display = 'none';
+            document.getElementById('fileProgressBar').style.width = '0%';
+            document.getElementById('fileProgressText').innerText = '0%';
+        }, 1500);
+    }
+
+    async function sendFileToRemote(file) {
+        console.log("File dropped:", file.name, file.size);
+
+        if (!file) return;
+
+        if (file.size > MAX_FILE_SIZE) {
+            alert('Файл слишком большой. Максимум: 25 МБ');
+            return;
+        }
+
+        updateFileProgress(file.name, 1);
+
+        const formData = new FormData();
+        formData.append('pcId', pcId);
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/api/files/upload', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Upload failed: HTTP ' + response.status);
+            }
+
+            const result = await response.json();
+
+            console.log("File uploaded to server:", result);
+
+            updateFileProgress(file.name, 100);
+            hideFileProgressDelayed();
+
+        } catch (e) {
+            console.error(e);
+            alert('Ошибка передачи файла: ' + e.message);
+            hideFileProgressDelayed();
         }
     }
 
@@ -714,6 +921,8 @@
             indicator.innerHTML = '👁️ View Mode - Keyboard & Mouse disabled';
             indicator.style.color = '#fbbf24';
         }
+
+        sendMetrics();
     }
 
     function toggleFullscreen() {
@@ -851,6 +1060,31 @@
         sendCommand('KEY_RELEASE', { keyCode: e.keyCode });
     });
 
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropOverlay.style.display = 'flex';
+    });
+
+    window.addEventListener('dragleave', (e) => {
+        if (e.clientX <= 0 || e.clientY <= 0 ||
+            e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+            dropOverlay.style.display = 'none';
+        }
+    });
+
+    window.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        dropOverlay.style.display = 'none';
+
+        const files = e.dataTransfer.files;
+
+        if (!files || files.length === 0) {
+            return;
+        }
+
+        await sendFileToRemote(files[0]);
+    });
+
     document.getElementById('resolutionSelect').addEventListener('change', (e) => {
         pendingResolution = e.target.value;
     });
@@ -899,6 +1133,8 @@
 
     window.addEventListener('beforeunload', () => {
         disconnectVideo();
+        if (pingInterval) clearInterval(pingInterval);
+        if (metricsInterval) clearInterval(metricsInterval);
         if (ws) ws.close();
     });
 

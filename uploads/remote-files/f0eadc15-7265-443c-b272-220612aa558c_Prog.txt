@@ -1,0 +1,38 @@
+
+%option noyywrap
+%{
+#define END_OF_FILE -1
+%}
+digit [0-9]
+letter [a-z]|[A-Z]
+operator \+|\-|\*|\/
+delimiter \,|\;
+reserved "if"|"then"|"else"|"do"|"while"
+
+%%
+
+{reserved}		{printf ("Reserved \t%s\n", yytext);}
+
+{letter}({letter}|{digit})*		{printf ("Identifier \t%s\n", yytext);}
+
+\-?{digit}+ 		{printf ("Real \t%s\n", yytext);}
+
+\-?{digit}+\.{digit}+		{printf ("Float \t%s\n", yytext);}
+
+{operator}    	{printf ("Operator \t%s\n", yytext);}
+
+{delimiter}		{printf ("Delimiter \t%s\n", yytext);}
+
+[ \t\n] {}
+
+<<EOF>> {}
+
+. { printf("Unknown symbol \t%s\n", yytext); }
+
+
+%%
+
+
+int main() {
+	yylex();
+}

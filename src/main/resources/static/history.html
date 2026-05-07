@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>История подключений</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body style="padding:24px;">
+<div style="max-width:1200px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+        <div>
+            <h1>История подключений</h1>
+            <p style="color:rgba(255,255,255,0.55);">Журнал удалённых сессий</p>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn-glass" onclick="exportJson()">Экспорт JSON</button>
+            <button class="btn-glass" onclick="exportCsv()">Экспорт CSV</button>
+            <button class="btn-glass" onclick="location.href='/pcs.html'">Назад</button>
+        </div>
+    </div>
+
+    <input id="filterInput" class="input-field" placeholder="Фильтр по ПК, IP, браузеру..." style="margin-bottom:20px;">
+
+    <div id="historyList"></div>
+</div>
+
+<script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = '/login.html';
+
+    let historyData = [];
+
+    async function loadHistory() {
+        const response = await fetch('/api/history', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (!response.ok) {
+            document.getElementById('historyList').innerHTML = '<p>Ошибка загрузки истории</p>';
+            return;
+        }
+
+        historyData = await response.json();
+        renderHistory(historyData);
+    }
+
+    function formatDuration(seconds) {
+        if (!seconds) return 'ещё активна';
+
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = seconds % 60;
+
+        if (h > 0) return `${h} ч ${m} мин ${s} сек`;
+        if (m > 0) return `${m} мин ${s} сек`;
+        return `${s} сек`;
+    }
+
+    function renderHistory(data) {
+        const list = document.getElementById('historyList');
+
+        if (data.length === 0) {
+            list.innerHTML = '<div class="glass-card" style="padding:30px;text-align:center;">История пустая</div>';
+            return;
+        }
+
+        list.innerHTML = data.map(item => `
+            <div class="glass-card" style="padding:22px;margin-bottom:16px;">
+                <div style="display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;">
+                    <div>
+                        <h3 style="margin-bottom:8px;">📅 ${new Date(item.connectedAt).toLocaleString()}</h3>
+                        <p style="color:rgba(255,255,255,0.65);">
+                            Отключение: ${item.disconnectedAt ? new Date(item.disconnectedAt).toLocaleString() : 'сессия активна'}
+                        </p>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="status-online">${item.mode || 'Control'}</div>
+                        <p style="margin-top:8px;color:rgba(255,255,255,0.65);">
+                            ${formatDuration(item.durationSeconds)}
+                        </p>
+                    </div>
+                </div>
+
+                <div style="border-top:1px solid rgba(255,255,255,0.1);margin:16px 0;"></div>
+
+                <p>💻 ПК: <b>${item.pcName || '-'}</b></p>
+                <p>👤 Пользователь: <b>${item.username || '-'}</b></p>
+                <p>🌐 IP: <b>${item.clientIp || '-'}</b></p>
+                <p>🧭 Устройство: ${item.clientInfo || '-'}</p>
+                <p>🎞 FPS: ${item.avgFps || 0} | 📶 Задержка: ${item.avgLatency || 0} ms | 📁 Файлов: ${item.filesSent || 0}</p>
+                ${item.issues ? `<p style="color:#fbbf24;">⚠️ ${item.issues}</p>` : ''}
+            </div>
+        `).join('');
+    }
+
+    document.getElementById('filterInput').addEventListener('input', e => {
+        const q = e.target.value.toLowerCase();
+
+        const filtered = historyData.filter(item =>
+            String(item.pcName || '').toLowerCase().includes(q) ||
+            String(item.clientIp || '').toLowerCase().includes(q) ||
+            String(item.clientInfo || '').toLowerCase().includes(q) ||
+            String(item.username || '').toLowerCase().includes(q)
+        );
+
+        renderHistory(filtered);
+    });
+
+    function exportJson() {
+        const blob = new Blob([JSON.stringify(historyData, null, 2)], { type: 'application/json' });
+        downloadBlob(blob, 'connection-history.json');
+    }
+
+    function exportCsv() {
+        const rows = [
+            ['ID', 'Session ID', 'User', 'PC', 'IP', 'Client', 'Mode', 'Start', 'End', 'Duration', 'FPS', 'Latency', 'Files', 'Issues']
+        ];
+
+        historyData.forEach(i => {
+            rows.push([
+                i.id,
+                i.sessionId,
+                i.username,
+                i.pcName,
+                i.clientIp,
+                i.clientInfo,
+                i.mode,
+                i.connectedAt,
+                i.disconnectedAt,
+                i.durationSeconds,
+                i.avgFps,
+                i.avgLatency,
+                i.filesSent,
+                i.issues
+            ]);
+        });
+
+        const csv = rows.map(r => r.map(v => `"${String(v ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        downloadBlob(blob, 'connection-history.csv');
+    }
+
+    function downloadBlob(blob, filename) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    loadHistory();
+</script>
+</body>
+</html>

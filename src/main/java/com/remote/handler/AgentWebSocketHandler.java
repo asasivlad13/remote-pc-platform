@@ -57,7 +57,15 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
 
         JsonNode json = objectMapper.readTree(payload);
         String type = json.get("type").asText();
+        if ("FILE_PROGRESS".equals(type)) {
+            Long pcId = getPcIdBySession(session);
 
+            if (pcId != null) {
+                webSocketClientHandler.broadcastFileProgress(pcId, json);
+            }
+
+            return;
+        }
         if ("register".equals(type)) {
             handleRegister(session, json);
         } else if ("heartbeat".equals(type)) {
@@ -65,6 +73,16 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
         } else if ("frame".equals(type)) {
             handleFrame(session, json);
         }
+    }
+
+    private Long getPcIdBySession(WebSocketSession session) {
+        for (Map.Entry<Long, WebSocketSession> entry : agentSessionsByPcId.entrySet()) {
+            if (entry.getValue().getId().equals(session.getId())) {
+                return entry.getKey();
+            }
+        }
+
+        return null;
     }
 
     @Override
@@ -160,7 +178,11 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
             Pc pc = pcRepository.findByMacAddress(mac);
             if (pc != null) {
                 pc.setLastConnection(LocalDateTime.now());
-                pc.setStatus(PcStatus.ONLINE);
+
+                if (pc.getStatus() != PcStatus.SLEEP) {
+                    pc.setStatus(PcStatus.ONLINE);
+                }
+
                 pcRepository.save(pc);
                 System.out.println("Heartbeat from: " + mac);
             }
@@ -197,9 +219,17 @@ public class AgentWebSocketHandler extends TextWebSocketHandler {
 
     public void sendNotificationToAgent(Long pcId, String message) throws Exception {
         WebSocketSession agentSession = agentSessionsByPcId.get(pcId);
+
         if (agentSession != null && agentSession.isOpen()) {
-            agentSession.sendMessage(new TextMessage("{\"type\":\"notification\",\"message\":\"" + message + "\"}"));
-            System.out.println("📢 Notification sent to agent for PC " + pcId);
+            Map<String, String> notification = Map.of(
+                    "type", "notification",
+                    "message", message
+            );
+
+            String json = objectMapper.writeValueAsString(notification);
+
+            agentSession.sendMessage(new TextMessage(json));
+            System.out.println("📢 Notification sent to agent for PC " + pcId + ": " + json);
         } else {
             System.out.println("Agent not connected for PC " + pcId + ", cannot send notification");
         }

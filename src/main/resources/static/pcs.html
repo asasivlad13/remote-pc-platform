@@ -13,7 +13,9 @@
             <h1 style="font-size: 32px;">My Computers</h1>
             <p style="color: rgba(255,255,255,0.5);">Manage your remote devices</p>
         </div>
-        <div style="display: flex; gap: 12px;">
+
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button onclick="location.href='/history.html'" class="btn-glass">📊 История</button>
             <button onclick="location.href='/change-password.html'" class="btn-glass">🔒 Change Password</button>
             <button onclick="logout()" class="btn-glass">🚪 Logout</button>
         </div>
@@ -31,8 +33,42 @@
     const token = localStorage.getItem('token');
     if (!token) window.location.href = '/login.html';
 
+    let pcsCache = [];
+
     function getStatusClass(status) {
         return status ? status.toLowerCase() : 'offline';
+    }
+
+    function getPowerButton(pc) {
+        const status = String(pc.status || 'OFFLINE').toUpperCase();
+
+        if (status === 'SLEEP' || status === 'SOFT_SLEEP') {
+            return `
+                <button class="btn-primary"
+                        style="width:100%;justify-content:center;margin-top:10px;background:linear-gradient(135deg,#10b981,#059669);"
+                        onclick="event.stopPropagation(); sendPowerCommand(${pc.id}, 'SOFT_WAKE')">
+                    ⚡ Умное пробуждение
+                </button>
+            `;
+        }
+
+        if (status === 'ONLINE') {
+            return `
+                <button class="btn-glass"
+                        style="width:100%;justify-content:center;margin-top:10px;background:rgba(245,158,11,0.2);border-color:rgba(245,158,11,0.5);"
+                        onclick="event.stopPropagation(); sendPowerCommand(${pc.id}, 'SOFT_SLEEP')">
+                    🌙 Умный сон
+                </button>
+            `;
+        }
+
+        return `
+            <button class="btn-glass"
+                    style="width:100%;justify-content:center;margin-top:10px;opacity:0.55;cursor:not-allowed;"
+                    onclick="event.stopPropagation(); alert('ПК сейчас недоступен')">
+                ⚫ Недоступен
+            </button>
+        `;
     }
 
     async function loadPCs() {
@@ -40,45 +76,108 @@
             const response = await fetch('/pcs', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+
             if (response.status === 401 || response.status === 403) {
                 localStorage.removeItem('token');
                 window.location.href = '/login.html';
                 return;
             }
+
             const pcs = await response.json();
+            pcsCache = pcs;
+
             const grid = document.getElementById('pcsGrid');
+
             if (pcs.length === 0) {
                 grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px;"><div style="font-size:64px;">💻</div><p>No computers found</p></div>';
                 return;
             }
+
             grid.innerHTML = pcs.map(pc => `
-                    <div class="pc-card fade-in-up" onclick="connect(${pc.id}, '${escape(pc.name)}')">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-                            <div style="width:48px;height:48px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:16px;display:flex;align-items:center;justify-content:center;">💻</div>
-                            <span class="status-${getStatusClass(pc.status)}">${pc.status || 'OFFLINE'}</span>
-                        </div>
-                        <h3 style="font-size:20px;margin-bottom:6px;">${escape(pc.name)}</h3>
-                        <p style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:16px;">🔌 ${escape(pc.macAddress)}</p>
-                        <div style="border-top:1px solid rgba(255,255,255,0.1);margin:16px 0;"></div>
-                        <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
-                            <span>🕐 Last seen:</span>
-                            <span>${pc.lastConnection ? new Date(pc.lastConnection).toLocaleString() : 'Never'}</span>
-                        </div>
-                        <button class="btn-primary" style="width:100%;justify-content:center;" onclick="event.stopPropagation(); connect(${pc.id}, '${escape(pc.name)}')">🔌 Connect</button>
+                <div class="pc-card fade-in-up" onclick="connect(${pc.id}, '${escapeHtml(pc.name)}')">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                        <div style="width:48px;height:48px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:16px;display:flex;align-items:center;justify-content:center;">💻</div>
+                        <span class="status-${getStatusClass(pc.status)}">${pc.status || 'OFFLINE'}</span>
                     </div>
-                `).join('');
-        } catch(e) {
+
+                    <h3 style="font-size:20px;margin-bottom:6px;">${escapeHtml(pc.name)}</h3>
+
+                    <p style="color:rgba(255,255,255,0.4);font-size:12px;margin-bottom:16px;">
+                        🔌 ${escapeHtml(pc.macAddress)}
+                    </p>
+
+                    <div style="border-top:1px solid rgba(255,255,255,0.1);margin:16px 0;"></div>
+
+                    <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:16px;">
+                        <span>🕐 Last seen:</span>
+                        <span>${pc.lastConnection ? new Date(pc.lastConnection).toLocaleString() : 'Never'}</span>
+                    </div>
+
+                    <button class="btn-primary"
+                            style="width:100%;justify-content:center;"
+                            onclick="event.stopPropagation(); connect(${pc.id}, '${escapeHtml(pc.name)}')">
+                        🔌 Connect
+                    </button>
+
+                    ${getPowerButton(pc)}
+                </div>
+            `).join('');
+
+        } catch (e) {
             console.error(e);
         }
     }
 
-    function escape(str) { if(!str) return ''; return str.replace(/[&<>]/g, function(m) { if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m; }); }
-    function connect(id, name) { window.location.href = `/watch.html?pcId=${id}&pcName=${encodeURIComponent(name)}`; }
-    function logout() { localStorage.removeItem('token'); window.location.href = '/login.html'; }
+    function sendPowerCommand(pcId, action) {
+        const confirmText = action === 'SOFT_SLEEP'
+            ? 'Перевести ПК в умный сон?'
+            : 'Вывести ПК из умного сна?';
+
+        if (!confirm(confirmText)) return;
+
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socket = new WebSocket(`${wsProtocol}//${window.location.hostname}:8080/ws/client`);
+
+        socket.onopen = () => {
+            socket.send(JSON.stringify({
+                type: 'command',
+                pcId: parseInt(pcId),
+                action: action
+            }));
+
+            setTimeout(() => {
+                socket.close();
+                loadPCs();
+            }, 500);
+        };
+
+        socket.onerror = () => {
+            alert('Не удалось отправить команду');
+        };
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/[&<>']/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            if (m === "'") return '&#39;';
+            return m;
+        });
+    }
+
+    function connect(id, name) {
+        window.location.href = `/watch.html?pcId=${id}&pcName=${encodeURIComponent(name)}`;
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.href = '/login.html';
+    }
+
     loadPCs();
     setInterval(loadPCs, 10000);
 </script>
 </body>
 </html>
-
-
