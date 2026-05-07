@@ -1,0 +1,438 @@
+#include <windows.h>
+#include <windowsx.h>
+#include <cmath>
+
+using namespace std;
+
+#define MAX_PRIMITIVES 1000
+#define VIEWPORT_LEFT   5      
+#define VIEWPORT_TOP    65     
+#define VIEWPORT_RIGHT  605   
+#define VIEWPORT_BOTTOM 665   
+
+
+enum PrimitiveType { PT_LINE, PT_RECT, PT_ELLIPSE };
+
+struct fPoint {
+    double x, y;
+    fPoint(double x = 0, double y = 0) : x(x), y(y) {}
+};
+
+struct MyPrim {
+    int id;              
+    PrimitiveType type;
+    fPoint p1, p2;
+};
+
+MyPrim model[MAX_PRIMITIVES];
+int primCount = 0;
+
+
+double winLeft = 0.0, winTop = 0.0, winRight = 1.0, winBottom = 1.0;
+
+enum Mode { _free, _drawing, _zooming };
+Mode currentMode = _free;
+POINT pb, pe;
+PrimitiveType currentPrimitive = PT_LINE;
+
+
+void ConstrainToViewport(int& x, int& y) {
+    if (x < VIEWPORT_LEFT) x = VIEWPORT_LEFT;
+    if (x > VIEWPORT_RIGHT) x = VIEWPORT_RIGHT;
+    if (y < VIEWPORT_TOP) y = VIEWPORT_TOP;
+    if (y > VIEWPORT_BOTTOM) y = VIEWPORT_BOTTOM;
+}
+
+
+void PrepareXOR(HDC hdc, bool isRect = false) {
+    SetROP2(hdc, R2_NOTXORPEN);
+    if (isRect) {
+        SelectObject(hdc, GetStockObject(NULL_BRUSH));
+    }
+}
+
+double NDC2DC_X(double wx) {
+    return VIEWPORT_LEFT + (VIEWPORT_RIGHT - VIEWPORT_LEFT) *
+        (wx - winLeft) / (winRight - winLeft);
+}
+double NDC2DC_Y(double wy) {
+    return VIEWPORT_TOP + (VIEWPORT_BOTTOM - VIEWPORT_TOP) *
+        (wy - winTop) / (winBottom - winTop);
+}
+POINT NDC2DC(fPoint wp) {
+    POINT p;
+    p.x = (LONG)NDC2DC_X(wp.x);
+    p.y = (LONG)NDC2DC_Y(wp.y);
+    return p;
+}
+
+double DC2NDC_X(double vx) {
+    return winLeft + (winRight - winLeft) *
+        (vx - VIEWPORT_LEFT) / (VIEWPORT_RIGHT - VIEWPORT_LEFT);
+}
+double DC2NDC_Y(double vy) {
+    return winTop + (winBottom - winTop) *
+        (vy - VIEWPORT_TOP) / (VIEWPORT_BOTTOM - VIEWPORT_TOP);
+}
+fPoint DC2NDC(POINT vp) {
+    return fPoint(DC2NDC_X(vp.x), DC2NDC_Y(vp.y));
+}
+
+void DrawPrim(HDC hdc, PrimitiveType type, POINT p1, POINT p2) {
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    
+    HBRUSH hatchBrush = CreateHatchBrush(HS_BDIAGONAL, RGB(0, 0, 0));        //
+    HGDIOBJ oldBrush = SelectObject(hdc, hatchBrush);                       //
+
+    int oldROP = SetROP2(hdc, R2_COPYPEN);
+
+    switch (type) {
+    case PT_LINE:
+        MoveToEx(hdc, p1.x, p1.y, NULL);
+        LineTo(hdc, p2.x, p2.y);
+        break;
+    case PT_RECT:
+        Rectangle(hdc, min(p1.x, p2.x), min(p1.y, p2.y),
+            max(p1.x, p2.x), max(p1.y, p2.y));
+        break;
+    case PT_ELLIPSE:
+        Ellipse(hdc, min(p1.x, p2.x), min(p1.y, p2.y),
+            max(p1.x, p2.x), max(p1.y, p2.y));
+        break;
+    }
+    SetROP2(hdc, oldROP);
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(hatchBrush);
+    DeleteObject(pen);
+}
+
+void drawModel(HDC hdc) {
+    RECT viewportRect = { VIEWPORT_LEFT, VIEWPORT_TOP,
+                          VIEWPORT_RIGHT, VIEWPORT_BOTTOM };
+    HBRUSH whiteBrush = CreateSolidBrush(RGB(255, 255, 255));
+    FillRect(hdc, &viewportRect, whiteBrush);
+    DeleteObject(whiteBrush);
+
+    HRGN clip = CreateRectRgn(VIEWPORT_LEFT, VIEWPORT_TOP,
+        VIEWPORT_RIGHT, VIEWPORT_BOTTOM);
+    SelectClipRgn(hdc, clip);
+
+    for (int i = 0; i < primCount; ++i) {
+        POINT p1 = NDC2DC(model[i].p1);
+        POINT p2 = NDC2DC(model[i].p2);
+        DrawPrim(hdc, model[i].type, p1, p2);
+    }
+
+    SelectClipRgn(hdc, NULL);
+    DeleteObject(clip);
+
+    HPEN borderPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+    HGDIOBJ oldPen = SelectObject(hdc, borderPen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+    Rectangle(hdc, VIEWPORT_LEFT, VIEWPORT_TOP,
+        VIEWPORT_RIGHT, VIEWPORT_BOTTOM);
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(borderPen);
+}
+
+void drawMenu(HDC hdc) {
+    const int btnWidth = 70;
+    const int btnHeight = 25;
+    int x = 5, y = 5;
+
+    RECT btnLine = { x, y, x + btnWidth, y + btnHeight };
+    RECT btnRect = { x + btnWidth + 5, y, x + 2 * btnWidth + 5, y + btnHeight };
+    RECT btnEllipse = { x + 2 * btnWidth + 10, y, x + 3 * btnWidth + 10, y + btnHeight };
+
+    HPEN pen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(LTGRAY_BRUSH));
+
+    Rectangle(hdc, btnLine.left, btnLine.top, btnLine.right, btnLine.bottom);
+    Rectangle(hdc, btnRect.left, btnRect.top, btnRect.right, btnRect.bottom);
+    Rectangle(hdc, btnEllipse.left, btnEllipse.top, btnEllipse.right, btnEllipse.bottom);
+
+    HBRUSH highlight = CreateSolidBrush(RGB(200, 200, 255));
+    RECT* pBtn = NULL;
+    if (currentPrimitive == PT_LINE) pBtn = &btnLine;
+    else if (currentPrimitive == PT_RECT) pBtn = &btnRect;
+    else pBtn = &btnEllipse;
+
+    RECT r = *pBtn;
+    InflateRect(&r, -2, -2);
+    FillRect(hdc, &r, highlight);
+    DeleteObject(highlight);
+
+    SetBkMode(hdc, TRANSPARENT);
+    DrawTextW(hdc, L"Line", -1, &btnLine, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(hdc, L"Rect", -1, &btnRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(hdc, L"Ellipse", -1, &btnEllipse, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+}
+
+void zoom(POINT p1, POINT p2) {
+    fPoint wp1 = DC2NDC(p1);
+    fPoint wp2 = DC2NDC(p2);
+
+    double minX = min(wp1.x, wp2.x);
+    double maxX = max(wp1.x, wp2.x);
+    double minY = min(wp1.y, wp2.y);
+    double maxY = max(wp1.y, wp2.y);
+
+    if (maxX - minX < 0.0001 || maxY - minY < 0.0001) return;
+
+    winLeft = minX;
+    winRight = maxX;
+    winTop = minY;
+    winBottom = maxY;
+}
+
+void onMouseLDown(HWND hwnd, LPARAM lParam) {
+    int x = GET_X_LPARAM(lParam);
+    int y = GET_Y_LPARAM(lParam);
+
+    if (y < 40) {
+        if (x < 75) currentPrimitive = PT_LINE;
+        else if (x < 150) currentPrimitive = PT_RECT;
+        else if (x < 225) currentPrimitive = PT_ELLIPSE;
+        InvalidateRect(hwnd, NULL, TRUE);
+        return;
+    }
+
+    if (currentMode == _free && x >= VIEWPORT_LEFT && x <= VIEWPORT_RIGHT &&
+        y >= VIEWPORT_TOP && y <= VIEWPORT_BOTTOM) {
+        currentMode = _drawing;
+        pb.x = x; pb.y = y;
+        pe = pb;
+
+        HDC hdc = GetDC(hwnd);
+        HPEN penPoint = CreatePen(PS_SOLID, 5, RGB(0, 255, 0));
+        HGDIOBJ oldPen = SelectObject(hdc, penPoint);
+        PrepareXOR(hdc, false);
+        MoveToEx(hdc, pb.x, pb.y, NULL);
+        LineTo(hdc, pb.x, pb.y);
+
+        SelectObject(hdc, penPoint);
+        SelectObject(hdc, oldPen);
+
+        ReleaseDC(hwnd, hdc);
+    }
+}
+
+void onMouseMove(HWND hwnd, LPARAM lParam) {
+    int x = GET_X_LPARAM(lParam);
+    int y = GET_Y_LPARAM(lParam);
+    ConstrainToViewport(x, y);
+
+    if (currentMode == _drawing) {
+        HDC hdc = GetDC(hwnd);
+        PrepareXOR(hdc, false);
+
+        MoveToEx(hdc, pb.x, pb.y, NULL);
+        LineTo(hdc, pe.x, pe.y);
+
+        pe.x = x; pe.y = y;
+
+        MoveToEx(hdc, pb.x, pb.y, NULL);
+        LineTo(hdc, pe.x, pe.y);
+
+        ReleaseDC(hwnd, hdc);
+    }
+
+    else if (currentMode == _zooming) {
+        int x = GET_X_LPARAM(lParam);
+        int y = GET_Y_LPARAM(lParam);
+
+        int dx = x - pb.x;
+        int dy = y - pb.y;
+
+        int size = max(abs(dx), abs(dy));
+
+        int newX, newY;
+
+        if (dx >= 0 && dy >= 0) {
+            newX = pb.x + size;
+            newY = pb.y + size;
+        }
+        else if (dx < 0 && dy >= 0) {
+            newX = pb.x - size;
+            newY = pb.y + size;
+        }
+        else if (dx >= 0 && dy < 0) {
+            newX = pb.x + size;
+            newY = pb.y - size;
+        }
+        else {
+            newX = pb.x - size;
+            newY = pb.y - size;
+        }
+
+        ConstrainToViewport(newX, newY);
+
+        HDC hdc = GetDC(hwnd);
+        PrepareXOR(hdc, true);
+
+      
+        Rectangle(hdc, pb.x, pb.y, pe.x, pe.y);
+
+        pe.x = newX;
+        pe.y = newY;
+        Rectangle(hdc, pb.x, pb.y, pe.x, pe.y);
+
+        ReleaseDC(hwnd, hdc);
+    }
+}
+
+void onMouseLUp(HWND hwnd, LPARAM lParam) {
+    if (currentMode == _drawing) {
+        int x = GET_X_LPARAM(lParam);
+        int y = GET_Y_LPARAM(lParam);
+        ConstrainToViewport(x, y);
+        pe.x = x; pe.y = y;
+
+        HDC hdc = GetDC(hwnd);
+        PrepareXOR(hdc, false);
+        MoveToEx(hdc, pb.x, pb.y, NULL);
+        LineTo(hdc, pe.x, pe.y);
+        ReleaseDC(hwnd, hdc);
+
+        if (pb.x != pe.x || pb.y != pe.y) {
+            if (primCount < MAX_PRIMITIVES) {
+                model[primCount].id = primCount;        
+                model[primCount].type = currentPrimitive;
+                model[primCount].p1 = DC2NDC(pb);
+                model[primCount].p2 = DC2NDC(pe);
+                primCount++;
+            }
+        }
+        InvalidateRect(hwnd, NULL, TRUE);
+        currentMode = _free;
+    }
+}
+
+void onMouseRDown(HWND hwnd, LPARAM lParam) {
+    int x = GET_X_LPARAM(lParam);
+    int y = GET_Y_LPARAM(lParam);
+
+    if (currentMode == _free && x >= VIEWPORT_LEFT && x <= VIEWPORT_RIGHT &&
+        y >= VIEWPORT_TOP && y <= VIEWPORT_BOTTOM) {
+        currentMode = _zooming;
+        pb.x = x; pb.y = y;
+        pe = pb;
+
+        HDC hdc = GetDC(hwnd);
+        PrepareXOR(hdc, true);
+        Rectangle(hdc, pb.x, pb.y, pb.x + 1, pb.y + 1);
+        ReleaseDC(hwnd, hdc);
+    }
+}
+
+void onMouseRUp(HWND hwnd, LPARAM lParam) {
+    if (currentMode == _zooming) {
+        int x = GET_X_LPARAM(lParam);
+        int y = GET_Y_LPARAM(lParam);
+        ConstrainToViewport(x, y);
+        pe.x = x; pe.y = y;
+
+        HDC hdc = GetDC(hwnd);
+        PrepareXOR(hdc, true);
+        Rectangle(hdc, pb.x, pb.y, pe.x, pe.y);
+        ReleaseDC(hwnd, hdc);
+
+        if (abs(pb.x - pe.x) > 5 && abs(pb.y - pe.y) > 5) {
+            zoom(pb, pe);
+        }
+        currentMode = _free;
+        InvalidateRect(hwnd, NULL, TRUE);
+    }
+}
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        drawModel(hdc);
+        drawMenu(hdc);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    case WM_ERASEBKGND:
+        return 1;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    case WM_MOUSEMOVE:
+        onMouseMove(hwnd, lParam);
+        break;
+    case WM_LBUTTONDOWN:
+        onMouseLDown(hwnd, lParam);
+        break;
+    case WM_LBUTTONUP:
+        onMouseLUp(hwnd, lParam);
+        break;
+    case WM_RBUTTONDOWN:
+        onMouseRDown(hwnd, lParam);
+        break;
+    case WM_RBUTTONUP:
+        onMouseRUp(hwnd, lParam);
+        break;
+    case WM_KEYDOWN:
+        if (wParam == 'C' || wParam == 'c') {
+            winLeft = 0; winTop = 0; winRight = 1; winBottom = 1;
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        break;
+    }
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+    PWSTR lpCmdLine, int nCmdShow) {
+
+    WNDCLASSW wc = {};
+    wc.lpszClassName = L"GraphEditor";
+    wc.hInstance = hInstance;
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.lpfnWndProc = WndProc;
+    wc.hCursor = LoadCursor(0, IDC_ARROW);
+
+    RegisterClassW(&wc);
+
+    HWND hwnd = CreateWindowW(wc.lpszClassName, L"Графический редактор",
+        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        100, 100, 750, 750, NULL, NULL, hInstance, NULL);
+
+    model[primCount].id = primCount;       
+    model[primCount].type = PT_LINE;
+    model[primCount].p1 = fPoint(0.1, 0.1);
+    model[primCount].p2 = fPoint(0.9, 0.9);
+    primCount++;
+
+    model[primCount].id = primCount;        
+    model[primCount].type = PT_RECT;
+    model[primCount].p1 = fPoint(0.2, 0.2);
+    model[primCount].p2 = fPoint(0.8, 0.8);
+    primCount++;
+
+    model[primCount].id = primCount;        
+    model[primCount].type = PT_ELLIPSE;
+    model[primCount].p1 = fPoint(0.3, 0.3);
+    model[primCount].p2 = fPoint(0.7, 0.7);
+    primCount++;
+
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    return (int)msg.wParam;
+}
